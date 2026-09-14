@@ -1,0 +1,416 @@
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter};
+
+pub static IS_SELF_COPY: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", content = "payload")]
+pub enum ClipboardPayload {
+    #[serde(rename = "text")]
+    Text {
+        text: String,
+        preview: String,
+        char_count: usize,
+        line_count: usize,
+    },
+    #[serde(rename = "image")]
+    Image {
+        data_url: String,
+        width: usize,
+        height: usize,
+        byte_size: usize,
+    },
+    #[serde(rename = "file")]
+    File {
+        paths: Vec<String>,
+        count: usize,
+        preview: String,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClipboardItem {
+    pub id: String,
+    pub timestamp: u64,
+    #[serde(flatten)]
+    pub payload: ClipboardPayload,
+}
+
+pub struct ClipboardState {
+    pub history: Arc<Mutex<Vec<ClipboardItem>>>,
+}
+
+impl ClipboardState {
+    pub fn new() -> Self {
+        Self {
+            history: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+/// Helper to get current timestamp in milliseconds
+fn current_time_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+// Windows native clipboard functions for CF_HDROP and formats
+#[cfg(target_os = "windows")]
+mod win32 {
+    use std::ptr::null_mut;
+    use windows_sys::Win32::Foundation::{HANDLE, POINT};
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber,
+        IsClipboardFormatAvailable, OpenClipboard, SetClipboardData,
+    };
+    use windows_sys::Win32::System::Memory::{
+        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+    };
+    use windows_sys::Win32::UI::Shell::{DragQueryFileW, DROPFILES};
+
+    pub const CF_HDROP: u32 = 15;
+
+    pub fn get_sequence_number() -> u32 {
+        unsafe { GetClipboardSequenceNumber() }
+    }
+
+    /// Try to open clipboard with retries in case another process is writing to it
+    pub fn open_clipboard_with_retry() -> bool {
+        for _ in 0..10 {
+            if unsafe { OpenClipboard(null_mut()) } != 0 {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        false
+    }
+
+    pub fn has_file_drop() -> bool {
+        unsafe { IsClipboardFormatAvailable(CF_HDROP) != 0 }
+    }
+
+    /// Read file paths from CF_HDROP
+    pub fn read_file_drop() -> Option<Vec<String>> {
+        if !has_file_drop() {
+            return None;
+        }
+
+        if !open_clipboard_with_retry() {
+            return None;
+        }
+
+        let mut paths = Vec::new();
+        unsafe {
+            let handle = GetClipboardData(CF_HDROP);
+            if !handle.is_null() {
+                let hdrop = handle as windows_sys::Win32::UI::Shell::HDROP;
+                let count = DragQueryFileW(hdrop, 0xFFFFFFFF, null_mut(), 0);
+                for i in 0..count {
+                    let len = DragQueryFileW(hdrop, i, null_mut(), 0);
+                    if len > 0 {
+                        let mut buffer: Vec<u16> = vec![0; (len + 1) as usize];
+                        DragQueryFileW(hdrop, i, buffer.as_mut_ptr(), len + 1);
+                        if let Ok(path) = String::from_utf16(&buffer[..len as usize]) {
+                            paths.push(path);
+                        }
+                    }
+                }
+            }
+            CloseClipboard();
+        }
+
+        if paths.is_empty() {
+            None
+        } else {
+            Some(paths)
+        }
+    }
+
+    /// Write file paths to CF_HDROP
+    pub fn write_file_drop(paths: &[String]) -> Result<(), String> {
+        if paths.is_empty() {
+            return Ok(());
+        }
+
+        let mut utf16_data: Vec<u16> = Vec::new();
+        for path in paths {
+            utf16_data.extend(path.encode_utf16());
+            utf16_data.push(0); // Null terminator between paths
+        }
+        utf16_data.push(0); // Double null terminator at the end
+
+        let dropfiles_size = std::mem::size_of::<DROPFILES>();
+        let data_size = utf16_data.len() * std::mem::size_of::<u16>();
+        let total_size = dropfiles_size + data_size;
+
+        unsafe {
+            let h_mem = GlobalAlloc(GMEM_MOVEABLE, total_size);
+            if h_mem.is_null() {
+                return Err("Failed to allocate global memory for HDROP".to_string());
+            }
+
+            let p_mem = GlobalLock(h_mem);
+            if p_mem.is_null() {
+                return Err("Failed to lock global memory for HDROP".to_string());
+            }
+
+            let dropfiles = p_mem as *mut DROPFILES;
+            (*dropfiles).pFiles = dropfiles_size as u32;
+            (*dropfiles).pt = POINT { x: 0, y: 0 };
+            (*dropfiles).fNC = 0;
+            (*dropfiles).fWide = 1; // Wide / Unicode strings
+
+            let dest_paths = (p_mem as *mut u8).add(dropfiles_size) as *mut u16;
+            std::ptr::copy_nonoverlapping(utf16_data.as_ptr(), dest_paths, utf16_data.len());
+
+            GlobalUnlock(h_mem);
+
+            if !open_clipboard_with_retry() {
+                return Err("Failed to open clipboard for writing HDROP".to_string());
+            }
+
+            EmptyClipboard();
+            let res = SetClipboardData(CF_HDROP, h_mem as HANDLE);
+            CloseClipboard();
+
+            if res.is_null() {
+                Err("SetClipboardData for CF_HDROP failed".to_string())
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+mod win32 {
+    pub fn get_sequence_number() -> u32 { 0 }
+    pub fn has_file_drop() -> bool { false }
+    pub fn read_file_drop() -> Option<Vec<String>> { None }
+    pub fn write_file_drop(_paths: &[String]) -> Result<(), String> { Ok(()) }
+}
+
+/// Read current clipboard content into a ClipboardPayload
+pub fn read_clipboard() -> Option<ClipboardPayload> {
+    // 1. Check for File Drop (CF_HDROP) first
+    #[cfg(target_os = "windows")]
+    {
+        if win32::has_file_drop() {
+            if let Some(paths) = win32::read_file_drop() {
+                let count = paths.len();
+                let preview = if count == 1 {
+                    Path::new(&paths[0])
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(&paths[0])
+                        .to_string()
+                } else {
+                    let first = Path::new(&paths[0])
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file");
+                    format!("{} (+{} more files)", first, count - 1)
+                };
+                return Some(ClipboardPayload::File {
+                    paths,
+                    count,
+                    preview,
+                });
+            }
+        }
+    }
+
+    // 2. Check for Image content
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        if let Ok(img) = clipboard.get_image() {
+            let width = img.width;
+            let height = img.height;
+            let bytes = img.bytes.into_owned();
+
+            if let Some(rgba_img) = image::RgbaImage::from_raw(width as u32, height as u32, bytes) {
+                let mut png_bytes = Vec::new();
+                let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
+                use image::ImageEncoder;
+                if encoder
+                    .write_image(
+                        &rgba_img,
+                        width as u32,
+                        height as u32,
+                        image::ExtendedColorType::Rgba8,
+                    )
+                    .is_ok()
+                {
+                    use base64::Engine;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+                    let data_url = format!("data:image/png;base64,{}", b64);
+                    let byte_size = png_bytes.len();
+                    return Some(ClipboardPayload::Image {
+                        data_url,
+                        width,
+                        height,
+                        byte_size,
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. Check for Text content
+    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        if let Ok(text) = clipboard.get_text() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                let char_count = text.chars().count();
+                let line_count = text.lines().count();
+                // Create preview: first ~100 characters or first 2 lines
+                let preview: String = text
+                    .lines()
+                    .take(2)
+                    .collect::<Vec<&str>>()
+                    .join(" ")
+                    .chars()
+                    .take(120)
+                    .collect();
+                return Some(ClipboardPayload::Text {
+                    text,
+                    preview,
+                    char_count,
+                    line_count,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+/// Write a ClipboardPayload back to the OS clipboard
+pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
+    IS_SELF_COPY.store(true, Ordering::SeqCst);
+
+    let result = match payload {
+        ClipboardPayload::Text { text, .. } => {
+            let mut clipboard = arboard::Clipboard::new()
+                .map_err(|e| format!("Failed to open clipboard: {}", e))?;
+            clipboard
+                .set_text(text)
+                .map_err(|e| format!("Failed to set text: {}", e))
+        }
+        ClipboardPayload::Image {
+            width,
+            height,
+            data_url,
+            ..
+        } => {
+            // Extract raw bytes from base64 data URL
+            let prefix = "data:image/png;base64,";
+            if let Some(b64) = data_url.strip_prefix(prefix) {
+                use base64::Engine;
+                let png_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(b64)
+                    .map_err(|e| format!("Failed to decode PNG base64: {}", e))?;
+                let img = image::load_from_memory(&png_bytes)
+                    .map_err(|e| format!("Failed to load PNG: {}", e))?
+                    .to_rgba8();
+
+                let mut clipboard = arboard::Clipboard::new()
+                    .map_err(|e| format!("Failed to open clipboard: {}", e))?;
+                clipboard
+                    .set_image(arboard::ImageData {
+                        width: *width,
+                        height: *height,
+                        bytes: std::borrow::Cow::Owned(img.into_raw()),
+                    })
+                    .map_err(|e| format!("Failed to set image: {}", e))
+            } else {
+                Err("Invalid image data url".to_string())
+            }
+        }
+        ClipboardPayload::File { paths, .. } => {
+            #[cfg(target_os = "windows")]
+            {
+                win32::write_file_drop(paths)
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let _ = paths;
+                Err("File clipboard writing only supported on Windows".to_string())
+            }
+        }
+    };
+
+    // Small delay to let OS register the sequence number update before clearing self copy flag
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    IS_SELF_COPY.store(false, Ordering::SeqCst);
+
+    result
+}
+
+/// Start background clipboard monitoring thread
+pub fn start_clipboard_monitor(app_handle: AppHandle, state: Arc<Mutex<Vec<ClipboardItem>>>) {
+    std::thread::spawn(move || {
+        // Check for initial clipboard content on startup
+        if let Some(payload) = read_clipboard() {
+            let mut history = state.lock().unwrap();
+            let id = format!("{}-initial", current_time_ms());
+            let item = ClipboardItem {
+                id,
+                timestamp: current_time_ms(),
+                payload,
+            };
+            history.push(item);
+        }
+
+        let mut last_seq = win32::get_sequence_number();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+
+            let current_seq = win32::get_sequence_number();
+            if current_seq != last_seq {
+                last_seq = current_seq;
+
+                // Check if this was triggered by our own copy operation
+                if IS_SELF_COPY.load(Ordering::SeqCst) {
+                    continue;
+                }
+
+                // Read clipboard
+                if let Some(payload) = read_clipboard() {
+                    let mut history = state.lock().unwrap();
+
+                    // Avoid duplicate if same payload as most recent item
+                    let is_duplicate = history
+                        .first()
+                        .map(|item| item.payload == payload)
+                        .unwrap_or(false);
+
+                    if !is_duplicate {
+                        let id = format!("{}-{}", current_time_ms(), history.len() + 1);
+                        let item = ClipboardItem {
+                            id,
+                            timestamp: current_time_ms(),
+                            payload,
+                        };
+
+                        crate::app_log(&format!("Captured new clipboard item: id={}, type={:?}", item.id, item.payload));
+                        history.insert(0, item.clone());
+
+                        // Cap in-memory history to 100 items for the spike
+                        if history.len() > 100 {
+                            history.truncate(100);
+                        }
+
+                        // Emit event to frontend
+                        let _ = app_handle.emit("clipboard-updated", &item);
+                    }
+                }
+            }
+        }
+    });
+}

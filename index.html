@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clippy</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div class="clippy-popup">
+      <!-- Window Title / Drag Bar -->
+      <header class="clippy-header" data-tauri-drag-region>
+        <div class="app-branding" data-tauri-drag-region>
+          <div class="app-logo">📎</div>
+          <span class="app-title">Clippy</span>
+          <span class="app-tag">Spike</span>
+        </div>
+        <div class="header-actions">
+          <button id="pin-btn" class="icon-btn" title="Toggle Pin (keep window open on blur)">📌</button>
+          <button id="clear-btn" class="icon-btn" title="Clear All History">🗑️</button>
+          <button id="close-btn" class="icon-btn" title="Close (Esc)">✕</button>
+        </div>
+      </header>
+
+      <!-- Search & Filter Controls -->
+      <div class="search-section">
+        <div class="search-bar">
+          <span class="search-icon">🔍</span>
+          <input
+            id="search-input"
+            type="text"
+            placeholder="Search clipboard history... (Type to filter)"
+            autocomplete="off"
+            spellcheck="false"
+            autofocus
+          />
+          <button id="search-clear-btn" class="search-clear-btn" style="display: none;">✕</button>
+        </div>
+
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="count-all">0</span></button>
+          <button class="filter-tab" data-filter="text">Text <span class="tab-count" id="count-text">0</span></button>
+          <button class="filter-tab" data-filter="image">Images <span class="tab-count" id="count-image">0</span></button>
+          <button class="filter-tab" data-filter="file">Files <span class="tab-count" id="count-file">0</span></button>
+        </div>
+      </div>
+
+      <!-- History List -->
+      <main class="history-container" id="history-container">
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">📋</div>
+          <div class="empty-title">Clipboard History is Empty</div>
+          <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy will automatically capture them!</div>
+          <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy</div>
+        </div>
+
+        <div class="history-list" id="history-list"></div>
+      </main>
+
+      <!-- Footer Bar -->
+      <footer class="clippy-footer">
+        <div class="footer-shortcuts">
+          <span class="shortcut-tag"><kbd>↑</kbd><kbd>↓</kbd> Move</span>
+          <span class="shortcut-tag"><kbd>↵</kbd> Copy</span>
+          <span class="shortcut-tag"><kbd>Esc</kbd> Close</span>
+        </div>
+        <div class="footer-status" id="footer-status">
+          <span>Global: <kbd>Ctrl+Shift+Space</kbd></span>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
