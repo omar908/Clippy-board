@@ -67,8 +67,9 @@ html, body {
 }
 
 .app-logo {
-  font-size: 17px;
-  line-height: 1;
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 
 .app-title {

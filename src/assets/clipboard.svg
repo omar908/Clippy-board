@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="clip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3f4f6"/>
+      <stop offset="1" stop-color="#d1d5db"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App surface background, rounded like the popup window -->
+  <rect width="1024" height="1024" rx="230" fill="#1e2129"/>
+
+  <!-- Clipboard body -->
+  <rect x="262" y="252" width="500" height="580" rx="64" fill="url(#body)"/>
+
+  <!-- Inner tray edge on top of the body -->
+  <rect x="262" y="252" width="500" height="88" rx="64" fill="#000000" opacity="0.10"/>
+
+  <!-- Clip -->
+  <rect x="402" y="168" width="220" height="140" rx="52" fill="url(#clip)"/>
+  <rect x="442" y="208" width="140" height="60" rx="28" fill="#1e2129"/>
+
+  <!-- Content lines -->
+  <rect x="342" y="428" width="340" height="52" rx="26" fill="#ffffff" opacity="0.92"/>
+  <rect x="342" y="528" width="340" height="52" rx="26" fill="#ffffff" opacity="0.92"/>
+  <rect x="342" y="628" width="220" height="52" rx="26" fill="#ffffff" opacity="0.55"/>
+</svg>
