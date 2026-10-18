@@ -81,6 +81,9 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Navigate** | `↑` / `↓` arrow keys |
 | **Copy an item** | Press `Enter`, or click an item |
 | **Close** | Press `Escape`, or click outside the window |
+| **Move window** | Drag anywhere in the header |
+| **Resize window** | Drag the bottom-right grip, or any window edge |
+| **Maximize** | Double-click the header |
 | **Pin window open** | Click the 📌 button (prevents auto-hide on blur) |
 | **Clear history** | Click 🗑️ |
 | **Quit** | Right-click the tray icon → Quit Clippy |
@@ -151,3 +154,5 @@ Clippy starts **in the system tray** (no window visible on launch).
 ## Technical Assessment
 
 See [Technical Assessment](./ASSESSMENT.md) for the full feasibility evaluation.
+
+**Result: GO WITH CAVEATS** (October 2026) — Tauri is suitable for Clippy. All 12 spike success criteria met. Measured: 447 ms cold start to tray, 26.5 MB idle memory, 0% idle CPU. Two Yellow findings (focus-vs-drag guard, background-thread window getters) are documented and resolved. Tauri is the assumed technology for the MVP.
