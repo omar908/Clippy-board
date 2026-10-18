@@ -156,3 +156,13 @@ Clippy starts **in the system tray** (no window visible on launch).
 See [Technical Assessment](./ASSESSMENT.md) for the full feasibility evaluation.
 
 **Result: GO WITH CAVEATS** (October 2026) — Tauri is suitable for Clippy. All 12 spike success criteria met. Measured: 447 ms cold start to tray, 26.5 MB idle memory, 0% idle CPU. Two Yellow findings (focus-vs-drag guard, background-thread window getters) are documented and resolved. Tauri is the assumed technology for the MVP.
+
+## Architecture Decision Records
+
+Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.md) — what was decided, why, and what constraints it places on future work. Consult these before making changes that touch window focus/hiding, threading, or core platform choices:
+
+| ADR | Decision |
+|---|---|
+| [0001](./docs/adr/0001-use-tauri-for-clippy.md) | Use Tauri (2) + Rust for Clippy |
+| [0002](./docs/adr/0002-popup-hide-on-blur-with-interaction-guard.md) | Popup hides on blur, with a native drag/resize interaction guard |
+| [0003](./docs/adr/0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only |
