@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 interface TextPayload {
   text: string;
@@ -349,6 +350,48 @@ clearBtn.addEventListener("click", () => {
 
 closeBtn.addEventListener("click", () => {
   invoke("hide_window");
+});
+
+// Resize grip — borderless windows are hard to grab at the edges,
+// so provide an explicit grip in the bottom-right corner.
+const resizeGrip = document.getElementById("resize-grip") as HTMLElement;
+resizeGrip.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  runNativeDrag(() => getCurrentWindow().startResizeDragging("SouthEast"));
+});
+
+// Native drag/resize enters a modal loop that reports a focus loss to the
+// window — tell the Rust side to suspend auto-hide until it finishes.
+// NOTE: the flag is set fire-and-forget and the drag op is started
+// synchronously — awaiting the invoke first delays the drag start past the
+// mousedown tick and Windows cancels it.
+function runNativeDrag(op: () => Promise<void>): void {
+  invoke("set_interacting", { interacting: true }).catch(() => {});
+  op().finally(() => {
+    // Small delay: focus events can arrive just after the modal loop ends
+    setTimeout(() => invoke("set_interacting", { interacting: false }).catch(() => {}), 150);
+  });
+}
+
+// Window dragging — data-tauri-drag-region doesn't fire for child elements
+// (spans, buttons), so explicitly start dragging from the header area.
+const headerEl = document.querySelector(".clippy-header") as HTMLElement;
+headerEl.addEventListener("mousedown", (e) => {
+  // Don't drag when interacting with the header action buttons
+  if ((e.target as HTMLElement).closest("button")) return;
+  e.preventDefault();
+  runNativeDrag(() => getCurrentWindow().startDragging());
+});
+
+// Double-click the header toggles maximize/restore
+headerEl.addEventListener("dblclick", (e) => {
+  if ((e.target as HTMLElement).closest("button")) return;
+  const win = getCurrentWindow();
+  win.isMaximized().then((max) => {
+    if (max) win.unmaximize();
+    else win.maximize();
+  });
 });
 
 // Window focus event

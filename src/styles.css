@@ -460,6 +460,29 @@ html, body {
   border: 1px solid var(--border-subtle);
 }
 
+/* Resize grip */
+.resize-grip {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 100;
+}
+
+.resize-grip::before {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid rgba(255, 255, 255, 0.25);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0 0 3px 0;
+}
+
 /* Footer */
 .clippy-footer {
   display: flex;

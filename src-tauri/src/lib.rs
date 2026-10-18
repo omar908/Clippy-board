@@ -10,6 +10,12 @@ static IS_PINNED: AtomicBool = AtomicBool::new(false);
 /// Timestamp (millis since epoch) when Clippy window was last shown.
 /// Used to prevent the Focused(false) handler from immediately re-hiding the window.
 static WINDOW_SHOWN_AT: AtomicU64 = AtomicU64::new(0);
+/// Whether the window has been positioned at least once (center on first summon only).
+static WINDOW_POSITIONED: AtomicBool = AtomicBool::new(false);
+/// Whether a native drag/resize operation is currently in progress.
+/// Native move/resize enters a modal loop that reports a focus loss to
+/// WebView2 — without this flag the auto-hide would fire mid-drag.
+static USER_INTERACTING: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 fn get_history(state: State<ClipboardState>) -> Vec<ClipboardItem> {
@@ -73,12 +79,54 @@ fn get_pinned() -> bool {
     IS_PINNED.load(Ordering::SeqCst)
 }
 
+#[tauri::command]
+fn set_interacting(interacting: bool) -> bool {
+    USER_INTERACTING.store(interacting, Ordering::SeqCst);
+    interacting
+}
+
 fn now_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// Whether the left mouse button is currently held down.
+#[cfg(windows)]
+fn mouse_left_button_down() -> bool {
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+    unsafe { GetAsyncKeyState(VK_LBUTTON as i32) as u16 & 0x8000 != 0 }
+}
+
+#[cfg(not(windows))]
+fn mouse_left_button_down() -> bool {
+    false
+}
+
+/// Hide the window once the left mouse button is released.
+/// Used when focus was lost mid native drag/resize — the window must not
+/// disappear while the user is still holding the button.
+fn defer_hide_until_mouse_up(app: AppHandle) {
+    std::thread::spawn(move || {
+        // Wait for button release (with a safety timeout of ~5s)
+        let mut waited = 0u32;
+        while mouse_left_button_down() && waited < 5000 {
+            std::thread::sleep(std::time::Duration::from_millis(30));
+            waited += 30;
+        }
+        // Small settle delay so the modal loop fully unwinds
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        // Re-check: only hide if still unpinned and still unfocused
+        if !IS_PINNED.load(Ordering::SeqCst) && !USER_INTERACTING.load(Ordering::SeqCst) {
+            if let Some(window) = app.get_webview_window("main") {
+                if !window.is_focused().unwrap_or(false) {
+                    let _ = window.hide();
+                }
+            }
+        }
+    });
 }
 
 fn toggle_window(app: &AppHandle) {
@@ -92,7 +140,10 @@ fn toggle_window(app: &AppHandle) {
         } else {
             // Record when we showed so the Focused(false) handler doesn't immediately hide
             WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
-            let _ = window.center();
+            // Center only the first time; afterwards keep the user's position/size
+            if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
+                let _ = window.center();
+            }
             let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -155,7 +206,8 @@ pub fn run() {
             match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Clippy")
                 .inner_size(460.0, 580.0)
-                .resizable(false)
+                .min_inner_size(360.0, 420.0)
+                .resizable(true)
                 .decorations(false)
                 .shadow(true)
                 .always_on_top(true)
@@ -235,12 +287,22 @@ pub fn run() {
                 }
                 tauri::WindowEvent::Focused(false) => {
                     // Hide when focus is lost, but only after a grace period from last show
-                    // to avoid immediately hiding when first summoned.
-                    if !IS_PINNED.load(Ordering::SeqCst) {
+                    // to avoid immediately hiding when first summoned. Never hide while a
+                    // native drag/resize is in progress (that reports a focus loss too).
+                    if !IS_PINNED.load(Ordering::SeqCst)
+                        && !USER_INTERACTING.load(Ordering::SeqCst)
+                    {
                         let shown_at = WINDOW_SHOWN_AT.load(Ordering::SeqCst);
                         let elapsed = now_ms().saturating_sub(shown_at);
                         if elapsed > 300 {
-                            let _ = window.hide();
+                            // Native move/resize loops (window edge borders, titlebar
+                            // drag) don't go through our JS flag — detect a held left
+                            // mouse button and defer the hide until it's released.
+                            if mouse_left_button_down() {
+                                defer_hide_until_mouse_up(window.app_handle().clone());
+                            } else {
+                                let _ = window.hide();
+                            }
                         }
                     }
                 }
@@ -258,7 +320,8 @@ pub fn run() {
             hide_window,
             show_window,
             set_pinned,
-            get_pinned
+            get_pinned,
+            set_interacting
         ]);
 
     app_log("Entering event loop...");
