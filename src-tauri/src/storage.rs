@@ -38,6 +38,10 @@ pub fn open(path: &Path) -> Result<Connection, String> {
 }
 
 /// Load all history items, newest first.
+///
+/// If the DB contains duplicate payloads (possible from builds that only
+/// deduped against the previous item), the newest occurrence wins and older
+/// copies are dropped — the in-memory history is always duplicate-free.
 pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
     let mut items = Vec::new();
     let mut stmt = match conn.prepare("SELECT id, timestamp, payload FROM history ORDER BY timestamp DESC") {
@@ -60,14 +64,23 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
             return items;
         }
     };
+    let mut seen_payloads: Vec<String> = Vec::new();
     for row in rows.flatten() {
         let (id, timestamp, payload_json) = row;
+        // Rows are newest-first; skip any payload we've already accepted.
+        if seen_payloads.contains(&payload_json) {
+            crate::app_log(&format!("storage: dropping duplicate payload row {}", id));
+            continue;
+        }
         match serde_json::from_str::<ClipboardPayload>(&payload_json) {
-            Ok(payload) => items.push(ClipboardItem {
-                id,
-                timestamp: timestamp as u64,
-                payload,
-            }),
+            Ok(payload) => {
+                seen_payloads.push(payload_json);
+                items.push(ClipboardItem {
+                    id,
+                    timestamp: timestamp as u64,
+                    payload,
+                })
+            }
             Err(e) => crate::app_log(&format!("storage: skipping corrupt item {}: {}", id, e)),
         }
     }

@@ -47,7 +47,7 @@ Storage growth from screenshot-heavy use was explicitly accepted as acceptable f
 ## Consequences
 
 **Positive**
-- History survives restarts; duplicate detection now also works **across sessions** (the monitor dedupes against the preloaded top item — fixed a spike limitation).
+- History survives restarts; duplicate detection is **full-history, move-to-top**: re-copying a payload that exists anywhere in history moves that entry to the top with a refreshed timestamp instead of creating a duplicate (`record_capture` in `clipboard.rs`). The startup capture only skips (never reorders) — launching the app must not shuffle history. `storage::load` also drops duplicate payload rows defensively (builds prior to this behavior may have persisted them).
 - List rendering uses ≤480 px thumbnails regardless of source image size; search/render no longer depends on multi-MB base64 decode.
 - Startup loads 100 items from a small indexed table — negligible time (single `SELECT` ordered by timestamp).
 - Storage failure can't take the app down; the in-memory behavior from the spike remains the fallback.

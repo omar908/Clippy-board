@@ -396,6 +396,82 @@ pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
     result
 }
 
+/// Record a captured clipboard payload into history.
+///
+/// Full-history dedup: if an equal payload already exists *anywhere* in
+/// history, that entry is moved to the top with a refreshed timestamp
+/// instead of creating a duplicate — the clipboard now holds it, so it is
+/// the most recent item.
+///
+/// `move_existing` is false for the startup capture: at launch we only want
+/// to avoid re-adding the clipboard's current content (which is almost
+/// always already item #1 from the last session); restarting the app must
+/// not reorder history as a side effect.
+///
+/// Emits `clipboard-updated` with the item that ended up at the top.
+/// Storage writes are best-effort (logged, never fatal to the monitor).
+fn record_capture(
+    app_handle: &AppHandle,
+    state: &Arc<Mutex<Vec<ClipboardItem>>>,
+    db: &Arc<Mutex<Option<rusqlite::Connection>>>,
+    payload: ClipboardPayload,
+    move_existing: bool,
+) {
+    let now = current_time_ms();
+    let item = {
+        let mut history = state.lock().unwrap();
+        match history.iter().position(|i| i.payload == payload) {
+            Some(pos) if move_existing => {
+                let mut existing = history.remove(pos);
+                existing.timestamp = now;
+                history.insert(0, existing.clone());
+                crate::app_log(&format!(
+                    "Dedup: moved existing item id={} to top",
+                    existing.id
+                ));
+                existing
+            }
+            Some(_) => {
+                // Startup: content already in history — leave order untouched.
+                crate::app_log("Dedup: startup clipboard already in history, skipped");
+                return;
+            }
+            None => {
+                let item = ClipboardItem {
+                    id: format!("{}-{}", now, history.len() + 1),
+                    timestamp: now,
+                    payload,
+                };
+                crate::app_log(&format!(
+                    "Captured new clipboard item: id={}, type={:?}",
+                    item.id, item.payload
+                ));
+                history.insert(0, item.clone());
+                if history.len() > crate::storage::MAX_HISTORY {
+                    history.truncate(crate::storage::MAX_HISTORY);
+                }
+                item
+            }
+        }
+    };
+
+    // Persist (best-effort) — INSERT OR REPLACE also handles the
+    // moved-and-retimestamped case.
+    {
+        let db = db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            if let Err(e) = crate::storage::insert(conn, &item) {
+                crate::app_log(&format!("storage: insert failed: {}", e));
+            }
+            if let Err(e) = crate::storage::trim(conn, crate::storage::MAX_HISTORY) {
+                crate::app_log(&format!("storage: trim failed: {}", e));
+            }
+        }
+    }
+
+    let _ = app_handle.emit("clipboard-updated", &item);
+}
+
 /// Start background clipboard monitoring thread
 pub fn start_clipboard_monitor(
     app_handle: AppHandle,
@@ -403,41 +479,10 @@ pub fn start_clipboard_monitor(
     db: Arc<Mutex<Option<rusqlite::Connection>>>,
 ) {
     std::thread::spawn(move || {
-        // Persist helper: best-effort writes, log failures, never crash the monitor.
-        let persist = |item: &ClipboardItem| {
-            let db = db.lock().unwrap();
-            if let Some(conn) = db.as_ref() {
-                if let Err(e) = crate::storage::insert(conn, item) {
-                    crate::app_log(&format!("storage: insert failed: {}", e));
-                }
-                if let Err(e) = crate::storage::trim(conn, crate::storage::MAX_HISTORY) {
-                    crate::app_log(&format!("storage: trim failed: {}", e));
-                }
-            }
-        };
-
-        // Check for initial clipboard content on startup — dedupe against
-        // history loaded from disk (the previous session's top item may be
-        // exactly what's still on the clipboard).
+        // Startup capture: only add if the current clipboard is NOT already
+        // anywhere in the loaded history (never reorder on launch).
         if let Some(payload) = read_clipboard() {
-            let mut history = state.lock().unwrap();
-            let is_duplicate = history
-                .first()
-                .map(|item| item.payload == payload)
-                .unwrap_or(false);
-            if !is_duplicate {
-                let id = format!("{}-initial", current_time_ms());
-                let item = ClipboardItem {
-                    id,
-                    timestamp: current_time_ms(),
-                    payload,
-                };
-                history.insert(0, item.clone());
-                drop(history);
-                persist(&item);
-            } else {
-                drop(history);
-            }
+            record_capture(&app_handle, &state, &db, payload, false);
         }
 
         let mut last_seq = win32::get_sequence_number();
@@ -453,38 +498,9 @@ pub fn start_clipboard_monitor(
                     continue;
                 }
 
-                // Read clipboard
+                // Read clipboard — full-history dedup with move-to-top
                 if let Some(payload) = read_clipboard() {
-                    let mut history = state.lock().unwrap();
-
-                    // Avoid duplicate if same payload as most recent item
-                    let is_duplicate = history
-                        .first()
-                        .map(|item| item.payload == payload)
-                        .unwrap_or(false);
-
-                    if !is_duplicate {
-                        let id = format!("{}-{}", current_time_ms(), history.len() + 1);
-                        let item = ClipboardItem {
-                            id,
-                            timestamp: current_time_ms(),
-                            payload,
-                        };
-
-                        crate::app_log(&format!("Captured new clipboard item: id={}, type={:?}", item.id, item.payload));
-                        history.insert(0, item.clone());
-
-                        // Cap in-memory history (matches storage::MAX_HISTORY)
-                        if history.len() > crate::storage::MAX_HISTORY {
-                            history.truncate(crate::storage::MAX_HISTORY);
-                        }
-
-                        drop(history);
-                        persist(&item);
-
-                        // Emit event to frontend
-                        let _ = app_handle.emit("clipboard-updated", &item);
-                    }
+                    record_capture(&app_handle, &state, &db, payload, true);
                 }
             }
         }
