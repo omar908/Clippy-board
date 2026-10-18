@@ -20,6 +20,10 @@ pub enum ClipboardPayload {
     #[serde(rename = "image")]
     Image {
         data_url: String,
+        /// Small PNG data URL (fit within 480px) used for list rendering.
+        /// The full-resolution `data_url` stays authoritative for restore.
+        #[serde(default)]
+        thumbnail: Option<String>,
         width: usize,
         height: usize,
         byte_size: usize,
@@ -42,12 +46,16 @@ pub struct ClipboardItem {
 
 pub struct ClipboardState {
     pub history: Arc<Mutex<Vec<ClipboardItem>>>,
+    /// SQLite connection for persistent history (None = storage unavailable,
+    /// the app degrades to in-memory-only behavior).
+    pub db: Arc<Mutex<Option<rusqlite::Connection>>>,
 }
 
 impl ClipboardState {
     pub fn new() -> Self {
         Self {
             history: Arc::new(Mutex::new(Vec::new())),
+            db: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -196,6 +204,40 @@ mod win32 {
     pub fn write_file_drop(_paths: &[String]) -> Result<(), String> { Ok(()) }
 }
 
+/// Maximum dimension (px) for the display thumbnail. Full-resolution image
+/// stays in `data_url`; this is only what the list renders (see ADR-0004).
+const THUMBNAIL_MAX_DIM: u32 = 480;
+
+/// Build a small PNG data URL for an image, preserving aspect ratio.
+/// Returns None if downscaling/encoding fails (caller keeps full image only).
+fn make_thumbnail(img: &image::RgbaImage, width: u32, height: u32) -> Option<String> {
+    let longest = width.max(height);
+    if longest <= THUMBNAIL_MAX_DIM {
+        // Small enough already — re-encode as-is
+        let mut png = Vec::new();
+        let enc = image::codecs::png::PngEncoder::new(&mut png);
+        use image::ImageEncoder;
+        enc.write_image(img, width, height, image::ExtendedColorType::Rgba8)
+            .ok()?;
+        use base64::Engine;
+        return Some(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&png)
+        ));
+    }
+
+    let dyn_img = image::DynamicImage::ImageRgba8(img.clone());
+    let thumb = dyn_img.thumbnail(THUMBNAIL_MAX_DIM, THUMBNAIL_MAX_DIM);
+    let mut png = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut png);
+    thumb.write_to(&mut cursor, image::ImageFormat::Png).ok()?;
+    use base64::Engine;
+    Some(format!(
+        "data:image/png;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&png)
+    ))
+}
+
 /// Read current clipboard content into a ClipboardPayload
 pub fn read_clipboard() -> Option<ClipboardPayload> {
     // 1. Check for File Drop (CF_HDROP) first
@@ -250,8 +292,10 @@ pub fn read_clipboard() -> Option<ClipboardPayload> {
                     let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
                     let data_url = format!("data:image/png;base64,{}", b64);
                     let byte_size = png_bytes.len();
+                    let thumbnail = make_thumbnail(&rgba_img, width as u32, height as u32);
                     return Some(ClipboardPayload::Image {
                         data_url,
+                        thumbnail,
                         width,
                         height,
                         byte_size,
@@ -353,18 +397,47 @@ pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
 }
 
 /// Start background clipboard monitoring thread
-pub fn start_clipboard_monitor(app_handle: AppHandle, state: Arc<Mutex<Vec<ClipboardItem>>>) {
+pub fn start_clipboard_monitor(
+    app_handle: AppHandle,
+    state: Arc<Mutex<Vec<ClipboardItem>>>,
+    db: Arc<Mutex<Option<rusqlite::Connection>>>,
+) {
     std::thread::spawn(move || {
-        // Check for initial clipboard content on startup
+        // Persist helper: best-effort writes, log failures, never crash the monitor.
+        let persist = |item: &ClipboardItem| {
+            let db = db.lock().unwrap();
+            if let Some(conn) = db.as_ref() {
+                if let Err(e) = crate::storage::insert(conn, item) {
+                    crate::app_log(&format!("storage: insert failed: {}", e));
+                }
+                if let Err(e) = crate::storage::trim(conn, crate::storage::MAX_HISTORY) {
+                    crate::app_log(&format!("storage: trim failed: {}", e));
+                }
+            }
+        };
+
+        // Check for initial clipboard content on startup — dedupe against
+        // history loaded from disk (the previous session's top item may be
+        // exactly what's still on the clipboard).
         if let Some(payload) = read_clipboard() {
             let mut history = state.lock().unwrap();
-            let id = format!("{}-initial", current_time_ms());
-            let item = ClipboardItem {
-                id,
-                timestamp: current_time_ms(),
-                payload,
-            };
-            history.push(item);
+            let is_duplicate = history
+                .first()
+                .map(|item| item.payload == payload)
+                .unwrap_or(false);
+            if !is_duplicate {
+                let id = format!("{}-initial", current_time_ms());
+                let item = ClipboardItem {
+                    id,
+                    timestamp: current_time_ms(),
+                    payload,
+                };
+                history.insert(0, item.clone());
+                drop(history);
+                persist(&item);
+            } else {
+                drop(history);
+            }
         }
 
         let mut last_seq = win32::get_sequence_number();
@@ -401,10 +474,13 @@ pub fn start_clipboard_monitor(app_handle: AppHandle, state: Arc<Mutex<Vec<Clipb
                         crate::app_log(&format!("Captured new clipboard item: id={}, type={:?}", item.id, item.payload));
                         history.insert(0, item.clone());
 
-                        // Cap in-memory history to 100 items for the spike
-                        if history.len() > 100 {
-                            history.truncate(100);
+                        // Cap in-memory history (matches storage::MAX_HISTORY)
+                        if history.len() > crate::storage::MAX_HISTORY {
+                            history.truncate(crate::storage::MAX_HISTORY);
                         }
+
+                        drop(history);
+                        persist(&item);
 
                         // Emit event to frontend
                         let _ = app_handle.emit("clipboard-updated", &item);

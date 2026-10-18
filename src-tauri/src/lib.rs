@@ -1,4 +1,5 @@
 mod clipboard;
+mod storage;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -44,6 +45,11 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
 fn delete_item(state: State<ClipboardState>, id: String) -> Result<(), String> {
     let mut history = state.history.lock().unwrap();
     history.retain(|i| i.id != id);
+    drop(history);
+    let db = state.db.lock().unwrap();
+    if let Some(conn) = db.as_ref() {
+        storage::delete(conn, &id)?;
+    }
     Ok(())
 }
 
@@ -51,6 +57,11 @@ fn delete_item(state: State<ClipboardState>, id: String) -> Result<(), String> {
 fn clear_history(state: State<ClipboardState>) -> Result<(), String> {
     let mut history = state.history.lock().unwrap();
     history.clear();
+    drop(history);
+    let db = state.db.lock().unwrap();
+    if let Some(conn) = db.as_ref() {
+        storage::clear(conn)?;
+    }
     Ok(())
 }
 
@@ -182,6 +193,7 @@ pub fn run() {
     app_log("Clippy starting up...");
     let state = ClipboardState::new();
     let history_arc = Arc::clone(&state.history);
+    let db_arc = Arc::clone(&state.db);
 
     let shortcut: Shortcut = "Ctrl+Shift+Space".parse().expect("failed to parse shortcut");
     let shortcut_clone = shortcut.clone();
@@ -220,9 +232,32 @@ pub fn run() {
                 Err(e) => app_log(&format!("WebviewWindow build FAILED: {}", e)),
             }
 
+            // Open persistent history storage (falls back to in-memory-only on failure)
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    let db_path = dir.join("history.db");
+                    match storage::open(&db_path) {
+                        Ok(conn) => {
+                            let items = storage::load(&conn);
+                            app_log(&format!(
+                                "Storage opened: {} ({} items loaded)",
+                                db_path.display(),
+                                items.len()
+                            ));
+                            *history_arc.lock().unwrap() = items;
+                            *db_arc.lock().unwrap() = Some(conn);
+                        }
+                        Err(e) => {
+                            app_log(&format!("Storage open FAILED, running in-memory only: {}", e));
+                        }
+                    }
+                }
+                Err(e) => app_log(&format!("No app data dir, running in-memory only: {}", e)),
+            }
+
             // Start clipboard monitor
             let app_handle = app.handle().clone();
-            clipboard::start_clipboard_monitor(app_handle, history_arc);
+            clipboard::start_clipboard_monitor(app_handle, history_arc, db_arc);
             app_log("Clipboard monitor started");
 
             // Register global shortcut

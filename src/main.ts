@@ -11,6 +11,7 @@ interface TextPayload {
 
 interface ImagePayload {
   data_url: string;
+  thumbnail?: string | null;
   width: number;
   height: number;
   byte_size: number;
@@ -196,7 +197,9 @@ function renderList() {
       const imgContainer = document.createElement("div");
       imgContainer.className = "item-content-image";
       const img = document.createElement("img");
-      img.src = item.payload.data_url;
+      // Prefer the pre-rendered thumbnail; full data_url is the fallback
+      // (and what restore uses — that path stays Rust-side).
+      img.src = item.payload.thumbnail || item.payload.data_url;
       img.alt = "Clipboard image preview";
       img.loading = "lazy";
       imgContainer.appendChild(img);

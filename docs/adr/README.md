@@ -62,3 +62,4 @@ this decision imposes on future work.
 | [0001](0001-use-tauri-for-clippy.md) | Use Tauri (2) + Rust for Clippy | Accepted |
 | [0002](0002-popup-hide-on-blur-with-interaction-guard.md) | Popup hides on blur, with a native drag/resize interaction guard | Accepted |
 | [0003](0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only | Accepted |
+| [0004](0004-persistent-history-sqlite.md) | Persistent history via SQLite, with full image + display thumbnail | Accepted |

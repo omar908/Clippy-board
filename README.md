@@ -109,7 +109,7 @@ Clippy starts **in the system tray** (no window visible on launch).
 │  • arboard (text + image clipboard)  │
 │  • Global shortcut (tauri-plugin)    │
 │  • Window lifecycle management       │
-│  • In-memory history (Vec)           │
+│  • SQLite history (rusqlite)         │
 │  • System tray icon                  │
 └──────────────────────────────────────┘
                    │
@@ -121,7 +121,8 @@ Clippy starts **in the system tray** (no window visible on launch).
 | File | Purpose |
 |---|---|
 | `src-tauri/src/lib.rs` | App entry point, Tauri setup, commands, global shortcut, tray, window events |
-| `src-tauri/src/clipboard.rs` | Clipboard monitoring, reading, writing (text/image/file) |
+| `src-tauri/src/clipboard.rs` | Clipboard monitoring, reading, writing (text/image/file), thumbnails |
+| `src-tauri/src/storage.rs` | SQLite history persistence (insert/load/delete/clear/trim) |
 | `src/main.ts` | Frontend logic: history rendering, search, keyboard nav, IPC |
 | `src/styles.css` | Dark popup UI styling |
 | `index.html` | Window layout |
@@ -142,12 +143,14 @@ Clippy starts **in the system tray** (no window visible on launch).
 
 ## Known Limitations (Spike Scope)
 
-- **No persistence** — clipboard history is in-memory only; cleared on restart
+- **History cap** — 100 items max (in-memory cap mirrored in SQLite); configurable retention is MVP Phase 2
 - **No dev-mode shortcut detection** — `Ctrl+Shift+Space` may conflict with some IDEs during `npm run tauri dev`; press `Ctrl+Shift+\`` as fallback or build release
-- **Window visibility probe** — Tauri's `window.hwnd()` / `window.is_visible()` return errors when called from background threads (the getter dispatches to the main event loop; the receiver times out). This is not a functional issue — the window shows/hides correctly; it's a diagnostic limitation
-- **Image history display** — large images are stored as full-resolution base64 PNGs; no thumbnail/resize in the spike
-- **No duplicate detection across session boundaries** — in-memory only
+- **Window visibility probe** — Tauri's `window.hwnd()` / `window.is_visible()` return errors when called from background threads (the getter dispatches to the main event loop; the receiver times out). This is not a functional issue — the window shows/hides correctly; it's a diagnostic limitation. See [ADR-0003](./docs/adr/0003-main-thread-only-window-property-getters.md)
 - **File clipboard write** — tested on Windows only (CF_HDROP is Windows-specific)
+
+## Persistence (MVP Phase 1)
+
+History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<you>\AppData\Roaming\com.clippy.app\history.db`). Images store full-resolution (exact restore) plus a 480px thumbnail for fast list rendering — see [ADR-0004](./docs/adr/0004-persistent-history-sqlite.md). If the DB can't be opened, the app logs the error and runs in-memory-only.
 
 ---
 
@@ -166,3 +169,4 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0001](./docs/adr/0001-use-tauri-for-clippy.md) | Use Tauri (2) + Rust for Clippy |
 | [0002](./docs/adr/0002-popup-hide-on-blur-with-interaction-guard.md) | Popup hides on blur, with a native drag/resize interaction guard |
 | [0003](./docs/adr/0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only |
+| [0004](./docs/adr/0004-persistent-history-sqlite.md) | Persistent history via SQLite, full image + display thumbnail |
