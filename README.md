@@ -79,9 +79,9 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Open Clippy** | Press `Ctrl + Shift + Space` from anywhere, or click the tray icon |
 | **Search** | Type immediately — search input has focus on open |
 | **Navigate** | `↑` / `↓` arrow keys |
-| **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` — the window widens with the panel; it closes shortly after the cursor leaves the window (or on copy/close) |
-| **Zoom image preview** | Click the previewed image — toggles fit ↔ 100% (scroll to pan) |
-| **Copy an item** | Press `Enter`, or click an item |
+| **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` (the first arrow after hovering continues from the hovered item) — the window widens with the panel, flipping it to the left side near a screen edge; it closes shortly after the cursor leaves the window (or on copy/close) |
+| **Zoom image preview** | Click the previewed image — toggles fit ↔ 100%, anchored on the point you clicked; drag (or middle-drag) to pan |
+| **Copy an item** | Press `Enter` — copies the hovered card when the cursor is over one, otherwise the highlighted item — or click an item |
 | **Close** | Press `Escape`, or click outside the window |
 | **Move window** | Drag anywhere in the header |
 | **Resize window** | Drag the bottom-right grip, or any window edge |
@@ -158,7 +158,7 @@ History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<
 
 ## Full-Content Preview
 
-Because the list line shows only a snippet, Clippy opens a **preview panel** for the item under the cursor or keyboard highlight — the window widens by 480 px while it's open. Hovering never changes what `Enter` copies; the keyboard highlight stays authoritative for that. Text renders complete and selectable (first 100k chars if longer), images fit the panel with click-to-zoom to 100%, and file entries list every path in full. The panel closes ~0.35 s after the cursor leaves the window, or when the window hides (copy, `Esc`, blur) — geometry is restored while the window is invisible, so position/size retention is unaffected. See [ADR-0005](./docs/adr/0005-full-content-preview-via-window-widening.md).
+Because the list line shows only a snippet, Clippy opens a **preview panel** for the item under the cursor or keyboard highlight — the window widens by 480 px while it's open, flipping the panel to the left side (growing leftward, list position untouched) when the window sits near a screen's right edge. The panel shows exactly what `Enter` will copy: the hovered card when the cursor is over one, otherwise the keyboard highlight (hovering window chrome like the header doesn't open the panel; the first arrow key after hovering re-anchors the highlight to the hovered item, so keyboard navigation continues from where you're looking). Text renders complete and selectable (first 100k chars if longer), images fit the panel with click-to-zoom anchored on the click point (drag or middle-drag to pan at 100%), and file entries list every path in full. The panel closes ~0.35 s after the cursor leaves the window, or when the window hides (copy, `Esc`, blur) — geometry is restored while the window is invisible, so position/size retention is unaffected. See [ADR-0005](./docs/adr/0005-full-content-preview-via-window-widening.md).
 
 ---
 

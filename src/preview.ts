@@ -80,13 +80,57 @@ function renderPreviewContent(header: HTMLElement, body: HTMLElement, item: Clip
 
     const wrap = document.createElement("div");
     wrap.className = "preview-image-wrap";
-    wrap.title = "Click to zoom to 100%";
+    wrap.title = "Click to zoom to 100% · drag to pan";
 
     const img = document.createElement("img");
     img.className = "preview-image";
     img.src = p.data_url;
     img.alt = "Clipboard image";
-    img.addEventListener("click", () => wrap.classList.toggle("zoomed"));
+
+    let suppressClick = false; // set after a drag, so release doesn't toggle zoom
+
+    // Zoom toggle anchored on the click point: the clicked spot stays under
+    // the cursor in both directions (fit <-> 100%).
+    img.addEventListener("click", (e) => {
+      if (suppressClick) { suppressClick = false; return; }
+      const r = img.getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      // Click point in natural image coordinates
+      const nx = (e.clientX - r.left) * (img.naturalWidth / r.width);
+      const ny = (e.clientY - r.top) * (img.naturalHeight / r.height);
+      wrap.classList.toggle("zoomed");
+      // Scroll so the same image point lands back under the cursor
+      const r2 = img.getBoundingClientRect();
+      const s2 = r2.width / img.naturalWidth;
+      wrap.scrollLeft = (r2.left - wr.left) + nx * s2 - (e.clientX - wr.left);
+      wrap.scrollTop = (r2.top - wr.top) + ny * s2 - (e.clientY - wr.top);
+    });
+
+    // Drag (left or middle button) pans the zoomed image.
+    wrap.addEventListener("mousedown", (e) => {
+      if (e.button !== 0 && e.button !== 1) return;
+      e.preventDefault(); // no selection drag, no middle-click auto-scroll
+      suppressClick = false;
+      const sx = e.clientX, sy = e.clientY;
+      const sl = wrap.scrollLeft, st = wrap.scrollTop;
+      let moved = false;
+      wrap.classList.add("grabbing");
+      const onMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if (!moved && Math.abs(dx) + Math.abs(dy) < 4) return; // click vs. drag
+        moved = true;
+        wrap.scrollLeft = sl - dx;
+        wrap.scrollTop = st - dy;
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        wrap.classList.remove("grabbing");
+        if (moved) suppressClick = true; // a drag must not toggle zoom on release
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    });
 
     wrap.append(img);
     body.append(wrap);
@@ -151,14 +195,18 @@ function openPanel(item: ClipboardItem): void {
   void expandGeometry();
 }
 
-/** Close the panel and restore the window geometry. Idempotent. */
+/** Close the panel and restore the window geometry. Idempotent.
+ *  Also drops the hover context: after a hide (copy, Esc, blur), a re-summoned
+ *  window starts from the keyboard highlight, not from a stale hover. */
 export function previewDismiss(): void {
   if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
   const wasOpen = open;
   open = false;
+  hovered = null;
   renderedId = null;
   if (wasOpen) {
     panelEl.classList.remove("open");
+    panelEl.classList.remove("panel-left");
     panelEl.setAttribute("aria-hidden", "true");
     bodyEl.replaceChildren(); // drop the full-size image for GC
   }
@@ -188,6 +236,11 @@ export function previewNavigate(): void {
   update(true);
 }
 
+/** Currently hovered item (sticky) — lets keyboard nav re-anchor to it. */
+export function previewHovered(): ClipboardItem | null {
+  return hovered;
+}
+
 /** Background refresh: re-render if open, close if the item is gone. Never opens. */
 export function previewRefresh(): void {
   if (!open) return;
@@ -201,10 +254,10 @@ export function initPreview(hostApi: PreviewHost): void {
   headerEl = document.getElementById("preview-header")!;
   bodyEl = document.getElementById("preview-body")!;
 
-  popupEl.addEventListener("mouseenter", () => {
-    cancelGrace();
-    update(true);
-  });
+  // The panel opens from card hover or keyboard navigation only — hovering
+  // window chrome (header, footer, search) must not open it. Leaving the
+  // window closes it after a short grace period; the hover stays sticky
+  // while the cursor is inside (moving onto the panel/header keeps it).
   popupEl.addEventListener("mouseleave", () => {
     hovered = null;
     startGrace();
@@ -227,9 +280,9 @@ let geo: "normal" | "expanded" | "busy" = "normal";
 let adjusting = false;
 let cachedInnerW = 0;   // logical inner width before expanding
 let cachedOuterX = 0;   // outer x before expanding
-let shiftedX = 0;       // outer x after the edge-flip shift (physical)
-let didShift = false;
-let pendingRestoreW: number | null = null; // width to apply after leaving maximize
+let flippedX = 0;       // outer x after flipping the panel to the left (physical)
+let flippedLeft = false;
+let pendingRestore: { w: number; x: number | null } | null = null; // applied after leaving maximize
 
 async function expandGeometry(): Promise<void> {
   if (geo !== "normal" || adjusting) return;
@@ -247,20 +300,26 @@ async function expandGeometry(): Promise<void> {
     cachedInnerW = innerLogical.width;
     cachedOuterX = outer.x;
 
-    // Shift left if widening would push the window off the right edge.
-    didShift = false;
+    // Widening grows the window to the right; if that would cross the work
+    // area's right edge, the panel flips to the LEFT side instead: the window
+    // grows leftward by exactly the panel width so the list column keeps its
+    // exact screen position (like a menu opening leftward near an edge).
+    flippedLeft = false;
+    let newX = outer.x;
     const mon = await currentMonitor();
     if (mon) {
       const panelPx = Math.round(PANEL_W * scale);
       const waRight = mon.workArea.position.x + mon.workArea.size.width;
       if (outer.x + outerSz.width + panelPx > waRight) {
-        const newX = Math.max(mon.workArea.position.x, waRight - outerSz.width - panelPx - 8);
-        if (newX < outer.x) { didShift = true; shiftedX = newX; }
+        newX = Math.max(mon.workArea.position.x, outer.x - panelPx);
+        flippedLeft = newX < outer.x;
       }
     }
+    if (flippedLeft) flippedX = newX;
 
     await win.setSize(new LogicalSize(cachedInnerW + PANEL_W, innerLogical.height));
-    if (didShift) await win.setPosition(new PhysicalPosition(shiftedX, outer.y));
+    if (flippedLeft) await win.setPosition(new PhysicalPosition(flippedX, outer.y));
+    panelEl.classList.toggle("panel-left", flippedLeft);
     geo = "expanded";
   } catch (e) {
     console.error("preview expand failed:", e);
@@ -280,7 +339,7 @@ async function restoreGeometry(): Promise<void> {
     const curW = inner.toLogical(scale).width;
 
     if (await win.isMaximized()) {
-      pendingRestoreW = cachedInnerW; // apply after the window leaves maximize
+      pendingRestore = { w: cachedInnerW, x: flippedLeft ? cachedOuterX : null };
       return;
     }
     // If the width no longer matches what we set, the user has resized while
@@ -288,9 +347,9 @@ async function restoreGeometry(): Promise<void> {
     if (Math.abs(curW - (cachedInnerW + PANEL_W)) > 2) return;
 
     await win.setSize(new LogicalSize(cachedInnerW, inner.toLogical(scale).height));
-    if (didShift) {
+    if (flippedLeft) {
       const pos = await win.outerPosition();
-      if (Math.abs(pos.x - shiftedX) <= 2) await win.setPosition(new PhysicalPosition(cachedOuterX, pos.y));
+      if (Math.abs(pos.x - flippedX) <= 2) await win.setPosition(new PhysicalPosition(cachedOuterX, pos.y));
     }
   } catch (e) {
     console.error("preview restore failed:", e);
@@ -306,10 +365,15 @@ export function previewHandleResize(): void {
     const win = getCurrentWindow();
     try {
       if (await win.isMaximized()) return;
-      if (pendingRestoreW !== null) {
+      if (pendingRestore !== null) {
+        const scale = await win.scaleFactor();
         const inner = await win.innerSize();
-        await win.setSize(new LogicalSize(pendingRestoreW, inner.toLogical(await win.scaleFactor()).height));
-        pendingRestoreW = null;
+        await win.setSize(new LogicalSize(pendingRestore.w, inner.toLogical(scale).height));
+        if (pendingRestore.x !== null) {
+          const pos = await win.outerPosition();
+          await win.setPosition(new PhysicalPosition(pendingRestore.x, pos.y));
+        }
+        pendingRestore = null;
       } else if (open && geo === "normal") {
         void expandGeometry();
       } else if (!open && geo === "expanded") {

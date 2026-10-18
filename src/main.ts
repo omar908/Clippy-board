@@ -6,6 +6,7 @@ import {
   initPreview,
   previewHover,
   previewNavigate,
+  previewHovered,
   previewRefresh,
   previewDismiss,
   previewHandleResize,
@@ -269,6 +270,20 @@ async function fetchInitialHistory() {
   }
 }
 
+// The hovered card, if it is still in the filtered list.
+function validHover(): ClipboardItem | null {
+  const h = previewHovered();
+  return h && filteredHistory.some((i) => i.id === h.id) ? h : null;
+}
+
+// Keyboard navigation continues from wherever the user is looking: the first
+// arrow key after hovering a card re-anchors the highlight there, then moves
+// one step from there.
+function reanchorToHover(): void {
+  const h = validHover();
+  if (h) selectedIndex = filteredHistory.findIndex((i) => i.id === h.id);
+}
+
 // Keyboard Navigation
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -278,6 +293,7 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
+      reanchorToHover();
       selectedIndex = Math.min(selectedIndex + 1, filteredHistory.length - 1);
       renderList();
       previewNavigate();
@@ -285,14 +301,18 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
+      reanchorToHover();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       renderList();
       previewNavigate();
     }
   } else if (e.key === "Enter") {
     e.preventDefault();
-    if (filteredHistory.length > 0 && selectedIndex < filteredHistory.length) {
-      selectItem(filteredHistory[selectedIndex].id);
+    // Enter copies exactly what the preview shows: the hovered card when
+    // the cursor is over one, otherwise the keyboard highlight.
+    const target = validHover() ?? filteredHistory[selectedIndex] ?? null;
+    if (target) {
+      selectItem(target.id);
     }
   }
 });

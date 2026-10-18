@@ -271,6 +271,14 @@ html, body {
   display: flex;
 }
 
+/* Flipped to the left side of the list when widening would cross the
+   screen's right edge — the list column keeps its exact position. */
+.preview-panel.panel-left {
+  order: -1;
+  border-left: none;
+  border-right: 1px solid var(--border-subtle);
+}
+
 .preview-header {
   flex: none;
   display: flex;
@@ -328,7 +336,11 @@ html, body {
 }
 
 .preview-image-wrap.zoomed {
-  cursor: zoom-out;
+  cursor: grab;
+}
+
+.preview-image-wrap.grabbing {
+  cursor: grabbing;
 }
 
 .preview-image {
