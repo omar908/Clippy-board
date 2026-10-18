@@ -150,7 +150,7 @@ Clippy starts **in the system tray** (no window visible on launch).
 
 ## Persistence (MVP Phase 1)
 
-History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<you>\AppData\Roaming\com.clippy.app\history.db`). Images store full-resolution (exact restore) plus a 480px thumbnail for fast list rendering — see [ADR-0004](./docs/adr/0004-persistent-history-sqlite.md). Duplicates are handled across the whole history: re-copying an existing item moves it to the top instead of creating a second entry. If the DB can't be opened, the app logs the error and runs in-memory-only.
+History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<you>\AppData\Roaming\com.clippy.app\history.db`). Images store full-resolution (exact restore) plus a 480px thumbnail for fast list rendering — see [ADR-0004](./docs/adr/0004-persistent-history-sqlite.md). Duplicates are handled across the whole history: re-copying an existing item — or restoring it from Clippy's list — moves it to the top instead of creating a second entry. If the DB can't be opened, the app logs the error and runs in-memory-only.
 
 ---
 

@@ -3,7 +3,7 @@ mod storage;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use clipboard::{ClipboardItem, ClipboardState};
 
@@ -31,7 +31,13 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
     };
 
     if let Some(payload) = payload {
+        // Only reorder on a successful write — a failed restore must not
+        // bump the item (IS_SELF_COPY keeps the monitor from double-handling
+        // this write, so the reorder is done directly here).
         clipboard::write_clipboard(&payload)?;
+        if let Some(item) = clipboard::bump_on_select(&state, &id) {
+            let _ = app.emit("clipboard-updated", &item);
+        }
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.hide();
         }

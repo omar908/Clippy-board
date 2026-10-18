@@ -396,6 +396,18 @@ pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
     result
 }
 
+/// Move the entry at `pos` to the top of `history`, refreshing its timestamp.
+///
+/// Shared by live dedup (`record_capture`) and restore-from-history
+/// (`bump_on_select`): in both cases the item just became the clipboard's
+/// most recent content, so it takes the top slot.
+fn move_to_top(history: &mut Vec<ClipboardItem>, pos: usize, now: u64) -> ClipboardItem {
+    let mut existing = history.remove(pos);
+    existing.timestamp = now;
+    history.insert(0, existing.clone());
+    existing
+}
+
 /// Record a captured clipboard payload into history.
 ///
 /// Full-history dedup: if an equal payload already exists *anywhere* in
@@ -422,14 +434,12 @@ fn record_capture(
         let mut history = state.lock().unwrap();
         match history.iter().position(|i| i.payload == payload) {
             Some(pos) if move_existing => {
-                let mut existing = history.remove(pos);
-                existing.timestamp = now;
-                history.insert(0, existing.clone());
+                let item = move_to_top(&mut history, pos, now);
                 crate::app_log(&format!(
                     "Dedup: moved existing item id={} to top",
-                    existing.id
+                    item.id
                 ));
-                existing
+                item
             }
             Some(_) => {
                 // Startup: content already in history — leave order untouched.
@@ -470,6 +480,44 @@ fn record_capture(
     }
 
     let _ = app_handle.emit("clipboard-updated", &item);
+}
+
+/// Bump an existing history entry to the top after the user restores it from
+/// the Clippy list (`select_item`).
+///
+/// This mirrors the live-capture dedup rule: whatever sits on the OS clipboard
+/// is the most recent item. Selection is suppressed from the monitor by
+/// `IS_SELF_COPY`, so the reorder happens directly here — keyed by id, after
+/// the clipboard write has succeeded (a failed restore must not reorder).
+/// Returns the moved item so the caller can emit it to the frontend.
+///
+/// Lock order: history mutex → released → db mutex → released → emit.
+pub fn bump_on_select(
+    state: &ClipboardState,
+    id: &str,
+) -> Option<ClipboardItem> {
+    let now = current_time_ms();
+    let item = {
+        let mut history = state.history.lock().unwrap();
+        let pos = history.iter().position(|i| i.id == id)?;
+        let item = move_to_top(&mut history, pos, now);
+        crate::app_log(&format!(
+            "Select: moved existing item id={} to top",
+            item.id
+        ));
+        item
+    };
+
+    {
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            if let Err(e) = crate::storage::insert(conn, &item) {
+                crate::app_log(&format!("storage: insert failed: {}", e));
+            }
+        }
+    }
+
+    Some(item)
 }
 
 /// Start background clipboard monitoring thread

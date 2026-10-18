@@ -47,7 +47,7 @@ Storage growth from screenshot-heavy use was explicitly accepted as acceptable f
 ## Consequences
 
 **Positive**
-- History survives restarts; duplicate detection is **full-history, move-to-top**: re-copying a payload that exists anywhere in history moves that entry to the top with a refreshed timestamp instead of creating a duplicate (`record_capture` in `clipboard.rs`). The startup capture only skips (never reorders) — launching the app must not shuffle history. `storage::load` also drops duplicate payload rows defensively (builds prior to this behavior may have persisted them).
+- History survives restarts; duplicate detection is **full-history, move-to-top**: re-copying a payload that exists anywhere in history moves that entry to the top with a refreshed timestamp instead of creating a duplicate (`record_capture` in `clipboard.rs`). Restoring an item from the Clippy list follows the same rule — it is now the clipboard content, so `select_item` bumps it to top directly (`bump_on_select`), and only after the clipboard write succeeds (a failed restore must not reorder). The startup capture only skips (never reorders) — launching the app must not shuffle history. `storage::load` also drops duplicate payload rows defensively (builds prior to this behavior may have persisted them).
 - List rendering uses ≤480 px thumbnails regardless of source image size; search/render no longer depends on multi-MB base64 decode.
 - Startup loads 100 items from a small indexed table — negligible time (single `SELECT` ordered by timestamp).
 - Storage failure can't take the app down; the in-memory behavior from the spike remains the fallback.
