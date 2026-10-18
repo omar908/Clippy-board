@@ -46,17 +46,25 @@
         </div>
       </div>
 
-      <!-- History List -->
-      <main class="history-container" id="history-container">
-        <div class="empty-state" id="empty-state">
-          <div class="empty-icon">📋</div>
-          <div class="empty-title">Clipboard History is Empty</div>
-          <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy will automatically capture them!</div>
-          <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy</div>
-        </div>
+      <!-- History List + Preview Panel -->
+      <div class="content-row" id="content-row">
+        <main class="history-container" id="history-container">
+          <div class="empty-state" id="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">Clipboard History is Empty</div>
+            <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy will automatically capture them!</div>
+            <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy</div>
+          </div>
 
-        <div class="history-list" id="history-list"></div>
-      </main>
+          <div class="history-list" id="history-list"></div>
+        </main>
+
+        <!-- Full-content preview (window widens while open) -->
+        <aside class="preview-panel" id="preview-panel" aria-hidden="true">
+          <div class="preview-header" id="preview-header"></div>
+          <div class="preview-body" id="preview-body"></div>
+        </aside>
+      </div>
 
       <!-- Footer Bar -->
       <footer class="clippy-footer">

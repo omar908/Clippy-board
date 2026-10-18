@@ -1,37 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-
-interface TextPayload {
-  text: string;
-  preview: string;
-  char_count: number;
-  line_count: number;
-}
-
-interface ImagePayload {
-  data_url: string;
-  thumbnail?: string | null;
-  width: number;
-  height: number;
-  byte_size: number;
-}
-
-interface FilePayload {
-  paths: string[];
-  count: number;
-  preview: string;
-}
-
-type ClipboardPayload =
-  | { type: "text"; payload: TextPayload }
-  | { type: "image"; payload: ImagePayload }
-  | { type: "file"; payload: FilePayload };
-
-type ClipboardItem = {
-  id: string;
-  timestamp: number;
-} & ClipboardPayload;
+import type { ClipboardItem } from "./types";
+import {
+  initPreview,
+  previewHover,
+  previewNavigate,
+  previewRefresh,
+  previewDismiss,
+  previewHandleResize,
+} from "./preview";
 
 let history: ClipboardItem[] = [];
 let filteredHistory: ClipboardItem[] = [];
@@ -104,6 +82,7 @@ function filterAndRender() {
   }
 
   renderList();
+  previewRefresh();
 }
 
 function renderList() {
@@ -235,6 +214,9 @@ function renderList() {
       selectItem(item.id);
     };
 
+    // Hover shows the full-content preview (never changes what Enter copies)
+    card.addEventListener("mouseenter", () => previewHover(item));
+
     historyList.appendChild(card);
   });
 
@@ -248,6 +230,8 @@ function renderList() {
 async function selectItem(id: string) {
   try {
     await invoke("select_item", { id });
+    // Rust hid the window — restore the pre-preview geometry while it's invisible.
+    previewDismiss();
   } catch (err) {
     console.error("Failed to select item:", err);
   }
@@ -289,18 +273,21 @@ async function fetchInitialHistory() {
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
-    invoke("hide_window");
+    // Hide first, then restore the pre-preview geometry while invisible.
+    invoke("hide_window").then(() => previewDismiss()).catch(() => {});
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
       selectedIndex = Math.min(selectedIndex + 1, filteredHistory.length - 1);
       renderList();
+      previewNavigate();
     }
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
       selectedIndex = Math.max(selectedIndex - 1, 0);
       renderList();
+      previewNavigate();
     }
   } else if (e.key === "Enter") {
     e.preventDefault();
@@ -352,7 +339,7 @@ clearBtn.addEventListener("click", () => {
 });
 
 closeBtn.addEventListener("click", () => {
-  invoke("hide_window");
+  invoke("hide_window").then(() => previewDismiss()).catch(() => {});
 });
 
 // Resize grip — borderless windows are hard to grab at the edges,
@@ -403,6 +390,11 @@ window.addEventListener("focus", () => {
   searchInput.select();
 });
 
+// Keep the preview geometry consistent across maximize/unmaximize and user resizes
+getCurrentWindow()
+  .onResized(() => previewHandleResize())
+  .catch(() => {});
+
 // Setup real-time clipboard listener
 async function setupListener() {
   await listen<ClipboardItem>("clipboard-updated", (event) => {
@@ -417,6 +409,10 @@ async function setupListener() {
 
 // Initialization
 window.addEventListener("DOMContentLoaded", () => {
+  initPreview({
+    getSelected: () => filteredHistory[selectedIndex] ?? null,
+    hasItem: (id) => filteredHistory.some((i) => i.id === id),
+  });
   searchInput.focus();
   fetchInitialHistory();
   setupListener();

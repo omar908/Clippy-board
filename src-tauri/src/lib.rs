@@ -38,9 +38,7 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
         if let Some(item) = clipboard::bump_on_select(&state, &id) {
             let _ = app.emit("clipboard-updated", &item);
         }
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.hide();
-        }
+        hide_main_window(&app);
         Ok(())
     } else {
         Err("Item not found".to_string())
@@ -71,11 +69,22 @@ fn clear_history(state: State<ClipboardState>) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-fn hide_window(app: AppHandle) -> Result<(), String> {
+/// Hide the main window and notify the frontend.
+///
+/// The webview cannot observe a native hide on its own (WebView2 keeps
+/// `document.visibilityState` "visible" for a hidden parent window), so
+/// every hide path emits `window-hidden` — the preview panel uses it to
+/// restore the pre-preview geometry while the window is invisible.
+fn hide_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.hide();
+        let _ = app.emit("window-hidden", ());
     }
+}
+
+#[tauri::command]
+fn hide_window(app: AppHandle) -> Result<(), String> {
+    hide_main_window(&app);
     Ok(())
 }
 
@@ -137,10 +146,12 @@ fn defer_hide_until_mouse_up(app: AppHandle) {
         std::thread::sleep(std::time::Duration::from_millis(80));
         // Re-check: only hide if still unpinned and still unfocused
         if !IS_PINNED.load(Ordering::SeqCst) && !USER_INTERACTING.load(Ordering::SeqCst) {
-            if let Some(window) = app.get_webview_window("main") {
-                if !window.is_focused().unwrap_or(false) {
-                    let _ = window.hide();
-                }
+            let focused = app
+                .get_webview_window("main")
+                .and_then(|w| w.is_focused().ok())
+                .unwrap_or(false);
+            if !focused {
+                hide_main_window(&app);
             }
         }
     });
@@ -152,7 +163,7 @@ fn toggle_window(app: &AppHandle) {
         let is_vis = window.is_visible().unwrap_or(false);
         app_log(&format!("toggle_window: is_visible = {}", is_vis));
         if is_vis {
-            let _ = window.hide();
+            hide_main_window(app);
             app_log("toggle_window: window hidden");
         } else {
             // Record when we showed so the Focused(false) handler doesn't immediately hide
@@ -323,7 +334,7 @@ pub fn run() {
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     // Don't close — just hide. Clippy lives in the tray.
-                    let _ = window.hide();
+                    hide_main_window(window.app_handle());
                     api.prevent_close();
                 }
                 tauri::WindowEvent::Focused(false) => {
@@ -342,7 +353,7 @@ pub fn run() {
                             if mouse_left_button_down() {
                                 defer_hide_until_mouse_up(window.app_handle().clone());
                             } else {
-                                let _ = window.hide();
+                                hide_main_window(window.app_handle());
                             }
                         }
                     }

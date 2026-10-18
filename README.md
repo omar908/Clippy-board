@@ -79,6 +79,8 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Open Clippy** | Press `Ctrl + Shift + Space` from anywhere, or click the tray icon |
 | **Search** | Type immediately — search input has focus on open |
 | **Navigate** | `↑` / `↓` arrow keys |
+| **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` — the window widens with the panel; it closes shortly after the cursor leaves the window (or on copy/close) |
+| **Zoom image preview** | Click the previewed image — toggles fit ↔ 100% (scroll to pan) |
 | **Copy an item** | Press `Enter`, or click an item |
 | **Close** | Press `Escape`, or click outside the window |
 | **Move window** | Drag anywhere in the header |
@@ -124,6 +126,8 @@ Clippy starts **in the system tray** (no window visible on launch).
 | `src-tauri/src/clipboard.rs` | Clipboard monitoring, reading, writing (text/image/file), thumbnails |
 | `src-tauri/src/storage.rs` | SQLite history persistence (insert/load/delete/clear/trim) |
 | `src/main.ts` | Frontend logic: history rendering, search, keyboard nav, IPC |
+| `src/types.ts` | Shared payload types (frontend mirror of the Rust `ClipboardPayload`) |
+| `src/preview.ts` | Full-content preview: renderer, hover/keyboard triggers, window geometry |
 | `src/styles.css` | Dark popup UI styling |
 | `index.html` | Window layout |
 | `src-tauri/tauri.conf.json` | Window config (borderless, always-on-top, skip-taskbar) |
@@ -152,6 +156,10 @@ Clippy starts **in the system tray** (no window visible on launch).
 
 History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<you>\AppData\Roaming\com.clippy.app\history.db`). Images store full-resolution (exact restore) plus a 480px thumbnail for fast list rendering — see [ADR-0004](./docs/adr/0004-persistent-history-sqlite.md). Duplicates are handled across the whole history: re-copying an existing item — or restoring it from Clippy's list — moves it to the top instead of creating a second entry. If the DB can't be opened, the app logs the error and runs in-memory-only.
 
+## Full-Content Preview
+
+Because the list line shows only a snippet, Clippy opens a **preview panel** for the item under the cursor or keyboard highlight — the window widens by 480 px while it's open. Hovering never changes what `Enter` copies; the keyboard highlight stays authoritative for that. Text renders complete and selectable (first 100k chars if longer), images fit the panel with click-to-zoom to 100%, and file entries list every path in full. The panel closes ~0.35 s after the cursor leaves the window, or when the window hides (copy, `Esc`, blur) — geometry is restored while the window is invisible, so position/size retention is unaffected. See [ADR-0005](./docs/adr/0005-full-content-preview-via-window-widening.md).
+
 ---
 
 ## Technical Assessment
@@ -170,3 +178,4 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0002](./docs/adr/0002-popup-hide-on-blur-with-interaction-guard.md) | Popup hides on blur, with a native drag/resize interaction guard |
 | [0003](./docs/adr/0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only |
 | [0004](./docs/adr/0004-persistent-history-sqlite.md) | Persistent history via SQLite, full image + display thumbnail |
+| [0005](./docs/adr/0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) |
