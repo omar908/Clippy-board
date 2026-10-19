@@ -235,10 +235,11 @@ function renderList() {
     historyList.appendChild(card);
   });
 
-  // Ensure selected item is scrolled into view
+  // Jump instantly: a smooth animation restarts on every arrow key (and
+  // key-repeat), so the list perpetually trails the highlight.
   const activeEl = historyList.querySelector(".history-item.selected") as HTMLElement | null;
   if (activeEl) {
-    activeEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    activeEl.scrollIntoView({ block: "nearest", behavior: "instant" });
   }
 }
 
