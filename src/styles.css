@@ -39,7 +39,7 @@ html, body {
 
 .clippy-popup {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   width: 100vw;
   background: var(--bg-window);
@@ -229,10 +229,15 @@ html, body {
   color: #bfdbfe;
 }
 
-/* Content Row: history list + preview side panel */
-.content-row {
+/* List column: chrome (header/search/footer) bundled with the list so the
+   preview panel's widening never shifts the header buttons, search bar, or
+   footer — they're anchored to this column, whose screen position is
+   invariant (the flip keeps it exactly in place). */
+.list-column {
   display: flex;
+  flex-direction: column;
   flex: 1;
+  min-width: 0;
   min-height: 0;
 }
 

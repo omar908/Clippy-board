@@ -9,45 +9,48 @@
   </head>
   <body>
     <div class="clippy-popup">
-      <!-- Window Title / Drag Bar -->
-      <header class="clippy-header" data-tauri-drag-region>
-        <div class="app-branding" data-tauri-drag-region>
-          <img src="/src/assets/clipboard.svg" alt="" class="app-logo" />
-          <span class="app-title">Clippy</span>
-          <span class="app-tag">Spike</span>
-        </div>
-        <div class="header-actions">
-          <button id="pin-btn" class="icon-btn" title="Toggle Pin (keep window open on blur)">📌</button>
-          <button id="clear-btn" class="icon-btn" title="Clear All History">🗑️</button>
-          <button id="close-btn" class="icon-btn" title="Close (Esc)">✕</button>
-        </div>
-      </header>
+      <!-- List column: all main-window chrome lives here, so the preview
+           panel's widening never moves the header buttons, search bar, or
+           footer — they're anchored to the list column, not the window. -->
+      <div class="list-column">
+        <!-- Window Title / Drag Bar -->
+        <header class="clippy-header" data-tauri-drag-region>
+          <div class="app-branding" data-tauri-drag-region>
+            <img src="/src/assets/clipboard.svg" alt="" class="app-logo" />
+            <span class="app-title">Clippy</span>
+            <span class="app-tag">Spike</span>
+          </div>
+          <div class="header-actions">
+            <button id="pin-btn" class="icon-btn" title="Toggle Pin (keep window open on blur)">📌</button>
+            <button id="clear-btn" class="icon-btn" title="Clear All History">🗑️</button>
+            <button id="close-btn" class="icon-btn" title="Close (Esc)">✕</button>
+          </div>
+        </header>
 
-      <!-- Search & Filter Controls -->
-      <div class="search-section">
-        <div class="search-bar">
-          <span class="search-icon">🔍</span>
-          <input
-            id="search-input"
-            type="text"
-            placeholder="Search clipboard history... (Type to filter)"
-            autocomplete="off"
-            spellcheck="false"
-            autofocus
-          />
-          <button id="search-clear-btn" class="search-clear-btn" style="display: none;">✕</button>
+        <!-- Search & Filter Controls -->
+        <div class="search-section">
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input
+              id="search-input"
+              type="text"
+              placeholder="Search clipboard history... (Type to filter)"
+              autocomplete="off"
+              spellcheck="false"
+              autofocus
+            />
+            <button id="search-clear-btn" class="search-clear-btn" style="display: none;">✕</button>
+          </div>
+
+          <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="count-all">0</span></button>
+            <button class="filter-tab" data-filter="text">Text <span class="tab-count" id="count-text">0</span></button>
+            <button class="filter-tab" data-filter="image">Images <span class="tab-count" id="count-image">0</span></button>
+            <button class="filter-tab" data-filter="file">Files <span class="tab-count" id="count-file">0</span></button>
+          </div>
         </div>
 
-        <div class="filter-tabs">
-          <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="count-all">0</span></button>
-          <button class="filter-tab" data-filter="text">Text <span class="tab-count" id="count-text">0</span></button>
-          <button class="filter-tab" data-filter="image">Images <span class="tab-count" id="count-image">0</span></button>
-          <button class="filter-tab" data-filter="file">Files <span class="tab-count" id="count-file">0</span></button>
-        </div>
-      </div>
-
-      <!-- History List + Preview Panel -->
-      <div class="content-row" id="content-row">
+        <!-- History List -->
         <main class="history-container" id="history-container">
           <div class="empty-state" id="empty-state">
             <div class="empty-icon">📋</div>
@@ -59,24 +62,24 @@
           <div class="history-list" id="history-list"></div>
         </main>
 
-        <!-- Full-content preview (window widens while open) -->
-        <aside class="preview-panel" id="preview-panel" aria-hidden="true">
-          <div class="preview-header" id="preview-header"></div>
-          <div class="preview-body" id="preview-body"></div>
-        </aside>
+        <!-- Footer Bar -->
+        <footer class="clippy-footer">
+          <div class="footer-shortcuts">
+            <span class="shortcut-tag"><kbd>↑</kbd><kbd>↓</kbd> Move</span>
+            <span class="shortcut-tag"><kbd>↵</kbd> Copy</span>
+            <span class="shortcut-tag"><kbd>Esc</kbd> Close</span>
+          </div>
+          <div class="footer-status" id="footer-status">
+            <span>Global: <kbd>Ctrl+Shift+Space</kbd></span>
+          </div>
+        </footer>
       </div>
 
-      <!-- Footer Bar -->
-      <footer class="clippy-footer">
-        <div class="footer-shortcuts">
-          <span class="shortcut-tag"><kbd>↑</kbd><kbd>↓</kbd> Move</span>
-          <span class="shortcut-tag"><kbd>↵</kbd> Copy</span>
-          <span class="shortcut-tag"><kbd>Esc</kbd> Close</span>
-        </div>
-        <div class="footer-status" id="footer-status">
-          <span>Global: <kbd>Ctrl+Shift+Space</kbd></span>
-        </div>
-      </footer>
+      <!-- Full-content preview (window widens while open) -->
+      <aside class="preview-panel" id="preview-panel" aria-hidden="true">
+        <div class="preview-header" id="preview-header"></div>
+        <div class="preview-body" id="preview-body"></div>
+      </aside>
 
       <!-- Resize grip (bottom-right corner) -->
       <div id="resize-grip" class="resize-grip" title="Resize"></div>
