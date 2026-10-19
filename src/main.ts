@@ -140,15 +140,8 @@ function renderList() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    const copyBtn = document.createElement("button");
-    copyBtn.className = "item-action-btn";
-    copyBtn.textContent = "Copy";
-    copyBtn.title = "Copy to clipboard (Enter)";
-    copyBtn.onclick = (e) => {
-      e.stopPropagation();
-      selectItem(item.id);
-    };
-
+    // Only delete lives here: the whole card is already the copy button
+    // (click and Enter both copy — a per-card Copy button was redundant).
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "item-action-btn btn-delete";
     deleteBtn.textContent = "✕";
@@ -158,7 +151,6 @@ function renderList() {
       deleteItem(item.id);
     };
 
-    actions.appendChild(copyBtn);
     actions.appendChild(deleteBtn);
 
     headerRow.appendChild(metaLeft);
@@ -214,15 +206,13 @@ function renderList() {
     };
 
     // Hover is one of the two traversals of the same flow: it moves the
-    // selection to the card under the cursor. Ignored while the keyboard
-    // owns the flow (see the takeover note above).
+    // selection to the card under the cursor. While an anchor is set
+    // (keyboard takeover, or right after a copy re-rendered the list under
+    // a parked cursor), only a pointer that actually moved re-engages hover.
     card.addEventListener("mouseenter", (e) => {
-      if (keyboardOwns) {
-        // A stationary cursor re-dispatched after re-render keeps keyboard
-        // control; only a pointer that actually moved re-engages the mouse.
-        if (e.clientX === pointerAtTakeover.x && e.clientY === pointerAtTakeover.y) return;
-        releaseKeyboard();
-      }
+      if (hoverAnchor && e.clientX === hoverAnchor.x && e.clientY === hoverAnchor.y) return;
+      hoverAnchor = null;
+      if (keyboardOwns) releaseKeyboard();
       const idx = filteredHistory.findIndex((i) => i.id === item.id);
       if (idx === -1) return;
       if (idx !== selectedIndex) {
@@ -246,8 +236,17 @@ function renderList() {
 async function selectItem(id: string) {
   try {
     await invoke("select_item", { id });
-    // Rust hid the window — restore the pre-preview geometry while it's invisible.
-    previewDismiss();
+    // The copy bumped this entry to the top of history — follow it there:
+    // highlight index 0 and scroll to top (persisting across hide/show,
+    // since the DOM survives), and ignore hover at the parked cursor so
+    // the re-render can't stomp the selection back.
+    selectedIndex = 0;
+    hoverAnchor = lastPointer;
+    filterAndRender();
+    // Unpinned: Rust hid the window — restore the pre-preview geometry
+    // while it's invisible. Pinned: the window stays open, so the panel
+    // (and geometry) follow their normal lifetime instead.
+    if (!isPinned) previewDismiss();
   } catch (err) {
     console.error("Failed to select item:", err);
   }
@@ -285,19 +284,21 @@ async function fetchInitialHistory() {
   }
 }
 
-// --- Keyboard takeover of the mouse -----------------------------------------
+// --- Stationary-cursor guard ------------------------------------------------
 // Hover and arrows move the same selection (hover IS selection). But a
 // stationary cursor re-fires hover after every re-render, which would pin
 // the selection next to the mouse — you couldn't arrow more than one card
-// away. So the first arrow key hands control to the keyboard: the cursor is
-// hidden (CSS) and hover updates are ignored until the pointer physically
-// moves (same-coordinate re-dispatches are discarded).
+// away, and a copy's bump re-render would steal the selection back from
+// the top. So hover re-engages only when the pointer physically moves:
+// same-coordinate re-dispatches are discarded via an anchor set at
+// keyboard takeover and after a copy. The first arrow key additionally
+// hides the cursor (CSS) until the pointer moves.
 let keyboardOwns = false;
-let pointerAtTakeover = { x: 0, y: 0 };
+let hoverAnchor: { x: number; y: number } | null = null;
 let lastPointer = { x: 0, y: 0 };
 
 function takeOverForKeyboard(): void {
-  pointerAtTakeover = lastPointer;
+  hoverAnchor = lastPointer;
   if (!keyboardOwns) {
     keyboardOwns = true;
     document.body.classList.add("keyboard-nav");
@@ -305,6 +306,7 @@ function takeOverForKeyboard(): void {
 }
 
 function releaseKeyboard(): void {
+  hoverAnchor = null;
   if (!keyboardOwns) return;
   keyboardOwns = false;
   document.body.classList.remove("keyboard-nav");
@@ -312,7 +314,7 @@ function releaseKeyboard(): void {
 
 window.addEventListener("mousemove", (e) => {
   lastPointer = { x: e.clientX, y: e.clientY };
-  if (keyboardOwns && (e.clientX !== pointerAtTakeover.x || e.clientY !== pointerAtTakeover.y)) {
+  if (keyboardOwns && hoverAnchor && (e.clientX !== hoverAnchor.x || e.clientY !== hoverAnchor.y)) {
     releaseKeyboard();
   }
 });

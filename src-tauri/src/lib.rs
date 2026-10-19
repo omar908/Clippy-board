@@ -38,7 +38,12 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
         if let Some(item) = clipboard::bump_on_select(&state, &id) {
             let _ = app.emit("clipboard-updated", &item);
         }
-        hide_main_window(&app);
+        // Like every other hide path, copy-dismiss checks IS_PINNED
+        // (ADR-0002): a pinned window stays open after copying so you can
+        // keep working through the list.
+        if !IS_PINNED.load(Ordering::SeqCst) {
+            hide_main_window(&app);
+        }
         Ok(())
     } else {
         Err("Item not found".to_string())

@@ -81,12 +81,12 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Navigate** | `↑` / `↓` arrow keys, or hover an item — both move the **same highlight** (hovering selects). The first arrow press takes over from the mouse: the cursor hides until the pointer moves |
 | **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` — the window widens with the panel, flipping it to the left side near a screen edge; it closes shortly after the cursor leaves the window (or on copy/close) |
 | **Zoom image preview** | Click the previewed image — toggles fit ↔ 100%, anchored on the point you clicked; drag (or middle-drag) to pan |
-| **Copy an item** | Press `Enter` — always copies the highlighted item, however it got highlighted — or click an item (click copies it directly) |
+| **Copy an item** | Press `Enter` — always copies the highlighted item, however it got highlighted — or click an item (click copies it directly); the copied entry jumps to the top of the list and the highlight follows it there |
 | **Close** | Press `Escape`, or click outside the window |
 | **Move window** | Drag anywhere in the header |
 | **Resize window** | Drag the bottom-right grip, or any window edge |
 | **Maximize** | Double-click the header |
-| **Pin window open** | Click the 📌 button (prevents auto-hide on blur) |
+| **Pin window open** | Click the 📌 button (prevents auto-hide — on blur and after copying) |
 | **Clear history** | Click 🗑️ |
 | **Quit** | Right-click the tray icon → Quit Clippy |
 
