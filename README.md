@@ -84,7 +84,7 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Copy an item** | Press `Enter` — always copies the highlighted item, however it got highlighted — or click an item (click copies it directly); the copied entry jumps to the top of the list and the highlight follows it there |
 | **Close** | Press `Escape`, or click outside the window |
 | **Move window** | Drag anywhere in the header |
-| **Resize window** | Drag the bottom-right grip, or any window edge |
+| **Resize window** | Drag the bottom-right grip, or any window edge — with the preview open, only the list column changes width |
 | **Maximize** | Double-click the header |
 | **Pin window open** | Click the 📌 button (prevents auto-hide — on blur and after copying) |
 | **Clear history** | Click 🗑️ |

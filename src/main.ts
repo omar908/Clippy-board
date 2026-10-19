@@ -8,6 +8,8 @@ import {
   previewRefresh,
   previewDismiss,
   previewHandleResize,
+  previewNativeDragStart,
+  previewNativeDragEnd,
 } from "./preview";
 
 let history: ClipboardItem[] = [];
@@ -412,10 +414,14 @@ resizeGrip.addEventListener("mousedown", (e) => {
 // synchronously — awaiting the invoke first delays the drag start past the
 // mousedown tick and Windows cancels it.
 function runNativeDrag(op: () => Promise<void>): void {
+  previewNativeDragStart(); // keep the preview up — the loop takes the mouse from the webview
   invoke("set_interacting", { interacting: true }).catch(() => {});
   op().finally(() => {
     // Small delay: focus events can arrive just after the modal loop ends
-    setTimeout(() => invoke("set_interacting", { interacting: false }).catch(() => {}), 150);
+    setTimeout(() => {
+      invoke("set_interacting", { interacting: false }).catch(() => {});
+      previewNativeDragEnd();
+    }, 150);
   });
 }
 

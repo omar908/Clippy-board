@@ -12,11 +12,16 @@
 //   3. geometry adapter        — expand/restore the main window (see bottom)
 
 import { getCurrentWindow, currentMonitor, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { ClipboardItem } from "./types";
 
 const PANEL_W = 480;        // logical px added to the window width
+const MIN_WIN_W = 360;      // width restores floor — mirrors min_inner_size in src-tauri/src/lib.rs
 const GRACE_MS = 350;       // close shortly after the cursor leaves the window
+const HOLD_QUIET_MS = 150;  // grace stays held this long after the last drag/resize event
+const RELEASE_POLL_MS = 150; // re-check the mouse button this often while it is held
+const RELEASE_MAX_MS = 30_000; // safety cap: a stuck check can't hold the panel forever
 const TEXT_CHAR_CAP = 100_000; // render at most this much text (full fidelity beyond is noise anyway)
 
 interface PreviewHost {
@@ -33,6 +38,9 @@ let bodyEl: HTMLElement;
 let open = false;
 let renderedId: string | null = null;
 let graceTimer: number | null = null;
+let holdUntil = 0;            // epoch ms — no grace dismissal before this (resize stream)
+let holdCheckTimer: number | null = null;
+let nativeDragActive = false; // JS-initiated native drag/resize loop in progress
 
 // ---------------------------------------------------------------------------
 // Content renderer (shape-agnostic: works in any container element)
@@ -209,7 +217,73 @@ export function previewDismiss(): void {
 
 function startGrace(): void {
   if (graceTimer !== null) clearTimeout(graceTimer);
-  graceTimer = window.setTimeout(() => { graceTimer = null; previewDismiss(); }, GRACE_MS);
+  graceTimer = window.setTimeout(() => {
+    graceTimer = null;
+    void graceFire();
+  }, GRACE_MS);
+}
+
+/** True while the left button is held anywhere on the machine. Rust reads
+ *  GetAsyncKeyState — authoritative even while a native modal loop owns the
+ *  mouse and the webview sees neither moves nor the button state. */
+function pointerHeld(): Promise<boolean> {
+  return invoke<boolean>("is_pointer_held").catch(() => false);
+}
+
+/** Poll until the button comes up (bounded by a safety cap). */
+async function waitPointerRelease(): Promise<void> {
+  const t0 = Date.now();
+  while ((await pointerHeld()) && Date.now() - t0 < RELEASE_MAX_MS) {
+    await new Promise((r) => window.setTimeout(r, RELEASE_POLL_MS));
+  }
+}
+
+/** Fire the grace close, but never while a drag owns the pointer. */
+async function graceFire(): Promise<void> {
+  if (nativeDragActive || Date.now() < holdUntil) return;
+  // A native edge resize has no JS hook: the modal sizing loop freezes the
+  // webview's hover and swallows resize events, so the hold above can lapse
+  // mid-drag (any pause while the button is held). Dismissing then would run
+  // the restore geometry against a transient width the OS sizing loop is
+  // about to override — the drag finishes at the dragged width *including*
+  // the panel, and the state has already flipped to "closed", so nothing
+  // ever subtracts it (user-reported 2026-10-19). Ask Rust whether the
+  // button is actually down and hold until release — the frontend mirror of
+  // defer_hide_until_mouse_up (ADR-0002).
+  if (await pointerHeld()) {
+    await waitPointerRelease();
+    refreshHold(); // quiet window, then :hover decides whether to re-arm
+    return;
+  }
+  // State can change while the invoke was in flight.
+  if (nativeDragActive || Date.now() < holdUntil) return;
+  previewDismiss();
+}
+
+/** Refresh the hold used while the OS sizing loop streams resize events
+ *  (native edge resize — no JS hook there). Once events go quiet, re-check
+ *  the real cursor position before letting the grace run again. */
+function refreshHold(): void {
+  holdUntil = Date.now() + HOLD_QUIET_MS;
+  if (holdCheckTimer !== null) clearTimeout(holdCheckTimer);
+  holdCheckTimer = window.setTimeout(() => {
+    holdCheckTimer = null;
+    holdUntil = 0;
+    if (popupEl && !popupEl.matches(":hover")) startGrace();
+  }, HOLD_QUIET_MS + 10);
+}
+
+/** Called by runNativeDrag for a JS-initiated native loop (header move, grip
+ *  resize). The drag op resolves as soon as the loop starts, so this flag only
+ *  covers the beginning; the pointer-state check in graceFire covers the rest. */
+export function previewNativeDragStart(): void {
+  nativeDragActive = true;
+  if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
+}
+
+export function previewNativeDragEnd(): void {
+  nativeDragActive = false;
+  refreshHold(); // quiet window, then :hover decides whether to re-arm
 }
 
 function cancelGrace(): void {
@@ -253,113 +327,139 @@ export function initPreview(hostApi: PreviewHost): void {
 // ---------------------------------------------------------------------------
 // Geometry adapter — widens the main window for the panel.
 // Swap this section (not the rest) if the preview moves to its own window.
+//
+// Every operation is RELATIVE and exactly ± the panel — nothing pre-expand
+// is cached for restore:
+//   - width: open = current + PANEL_W, close = current - PANEL_W (floored at
+//     the app min width). The panel is a fixed 480 px CSS column, so user
+//     resizes while open are list-column resizes and closing keeps exactly
+//     the list width the user created.
+//   - x:     a flip shifts left by PANEL_W; closing a flipped panel shifts
+//     right by PANEL_W from the current position, so the list keeps its
+//     screen position after any drag.
+// Restoring absolute pre-expand coordinates instead (gated on "hasn't
+// moved/resized since") skipped the compensation after any user change,
+// teleporting the list by a full panel width (user-reported 2026-10-18).
+// All ops run through one queue, so interleaved expand/restore pairs can
+// never apply deltas computed from stale state.
 // ---------------------------------------------------------------------------
 
-let geo: "normal" | "expanded" | "busy" = "normal";
-let adjusting = false;
-let cachedInnerW = 0;   // logical inner width before expanding
-let cachedOuterX = 0;   // outer x before expanding
-let flippedX = 0;       // outer x after flipping the panel to the left (physical)
+let geo: "normal" | "expanded" = "normal";
 let flippedLeft = false;
-let pendingRestore: { w: number; x: number | null } | null = null; // applied after leaving maximize
+let pendingRestore: { flipped: boolean } | null = null; // applied after leaving maximize
+let geoQueue: Promise<void> = Promise.resolve();
 
-async function expandGeometry(): Promise<void> {
-  if (geo !== "normal" || adjusting) return;
-  const win = getCurrentWindow();
-  try {
-    adjusting = true;
-    if (await win.isMaximized()) return; // already wide enough; nothing to restore later
+function queueGeoOp(op: () => Promise<void>): Promise<void> {
+  geoQueue = geoQueue.then(op).catch((e) => console.error("preview geometry failed:", e));
+  return geoQueue;
+}
 
-    const scale = await win.scaleFactor();
-    const inner = await win.innerSize();       // physical
-    const outer = await win.outerPosition();   // physical
-    const outerSz = await win.outerSize();     // physical
-    const innerLogical = inner.toLogical(scale);
+function panelPx(scale: number): number {
+  return Math.round(PANEL_W * scale);
+}
 
-    cachedInnerW = innerLogical.width;
-    cachedOuterX = outer.x;
+function expandGeometry(): Promise<void> {
+  return queueGeoOp(async () => {
+    if (geo !== "normal") return;
+    const win = getCurrentWindow();
+    try {
+      if (await win.isMaximized()) return; // already wide enough; nothing to restore later
 
-    // Widening grows the window to the right; if that would cross the work
-    // area's right edge, the panel flips to the LEFT side instead: the window
-    // grows leftward by exactly the panel width so the list column keeps its
-    // exact screen position (like a menu opening leftward near an edge).
-    flippedLeft = false;
-    let newX = outer.x;
-    const mon = await currentMonitor();
-    if (mon) {
-      const panelPx = Math.round(PANEL_W * scale);
-      const waRight = mon.workArea.position.x + mon.workArea.size.width;
-      if (outer.x + outerSz.width + panelPx > waRight) {
-        newX = Math.max(mon.workArea.position.x, outer.x - panelPx);
-        flippedLeft = newX < outer.x;
+      const scale = await win.scaleFactor();
+      const inner = await win.innerSize();       // physical
+      const outer = await win.outerPosition();   // physical
+      const outerSz = await win.outerSize();     // physical
+      const innerLogical = inner.toLogical(scale);
+
+      // Widening grows the window to the right; if that would cross the work
+      // area's right edge, the panel flips to the LEFT side instead: the window
+      // grows leftward by exactly the panel width so the list column keeps its
+      // exact screen position (like a menu opening leftward near an edge).
+      flippedLeft = false;
+      let newX = outer.x;
+      const mon = await currentMonitor();
+      if (mon) {
+        const px = panelPx(scale);
+        const waRight = mon.workArea.position.x + mon.workArea.size.width;
+        if (outer.x + outerSz.width + px > waRight) {
+          newX = Math.max(mon.workArea.position.x, outer.x - px);
+          flippedLeft = newX < outer.x;
+        }
       }
-    }
-    if (flippedLeft) flippedX = newX;
 
-    await win.setSize(new LogicalSize(cachedInnerW + PANEL_W, innerLogical.height));
-    if (flippedLeft) await win.setPosition(new PhysicalPosition(flippedX, outer.y));
-    panelEl.classList.toggle("panel-left", flippedLeft);
-    geo = "expanded";
-  } catch (e) {
-    console.error("preview expand failed:", e);
-  } finally {
-    adjusting = false;
-  }
+      await win.setSize(new LogicalSize(innerLogical.width + PANEL_W, innerLogical.height));
+      if (flippedLeft) await win.setPosition(new PhysicalPosition(newX, outer.y));
+      panelEl.classList.toggle("panel-left", flippedLeft);
+      geo = "expanded";
+    } catch (e) {
+      console.error("preview expand failed:", e);
+    }
+  });
 }
 
-async function restoreGeometry(): Promise<void> {
-  if (geo !== "expanded" || adjusting) return;
-  geo = "normal";
-  const win = getCurrentWindow();
-  try {
-    adjusting = true;
-    const scale = await win.scaleFactor();
-    const inner = await win.innerSize();
-    const curW = inner.toLogical(scale).width;
+function restoreGeometry(): Promise<void> {
+  return queueGeoOp(async () => {
+    if (geo !== "expanded") return;
+    geo = "normal";
+    const win = getCurrentWindow();
+    try {
+      const scale = await win.scaleFactor();
+      const inner = await win.innerSize();
+      const innerLogical = inner.toLogical(scale);
 
-    if (await win.isMaximized()) {
-      pendingRestore = { w: cachedInnerW, x: flippedLeft ? cachedOuterX : null };
-      return;
+      if (await win.isMaximized()) {
+        pendingRestore = { flipped: flippedLeft };
+        return;
+      }
+      // A flipped panel occupies the window's LEFT edge: closing it must
+      // shift the window right by exactly the panel width so the list keeps
+      // its screen position — from wherever the window is now, the user's
+      // own drags included. (An unflipped panel widens rightward, so the
+      // shrink is invisible on screen and no shift is needed.)
+      if (flippedLeft) {
+        const pos = await win.outerPosition();
+        await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
+      }
+      // Closing removes exactly the panel column: subtract its width from
+      // wherever the window is now. The panel is a fixed 480 px CSS column,
+      // so any resize while open was a list-column resize — this keeps the
+      // list width the user created instead of a pre-expand cache (whose
+      // mismatch check skipped restoration entirely after any user resize).
+      const targetW = Math.max(MIN_WIN_W, innerLogical.width - PANEL_W);
+      await win.setSize(new LogicalSize(targetW, innerLogical.height));
+    } catch (e) {
+      console.error("preview restore failed:", e);
     }
-    // If the width no longer matches what we set, the user has resized while
-    // the panel was open — leave their geometry alone.
-    if (Math.abs(curW - (cachedInnerW + PANEL_W)) > 2) return;
-
-    await win.setSize(new LogicalSize(cachedInnerW, inner.toLogical(scale).height));
-    if (flippedLeft) {
-      const pos = await win.outerPosition();
-      if (Math.abs(pos.x - flippedX) <= 2) await win.setPosition(new PhysicalPosition(cachedOuterX, pos.y));
-    }
-  } catch (e) {
-    console.error("preview restore failed:", e);
-  } finally {
-    adjusting = false;
-  }
+  });
 }
 
-/** Self-healing for maximize/unmaximize and user resizes around panel state. */
+/** Self-healing for maximize/unmaximize and user resizes around panel state.
+ *  Every resize event also holds the grace close: the OS sizing loop takes
+ *  the mouse from the webview, which sees a synthetic leave and would close
+ *  the preview mid-drag (native edge resize has no JS hook to catch). */
 export function previewHandleResize(): void {
-  if (adjusting) return;
-  void (async () => {
+  refreshHold();
+  void queueGeoOp(async () => {
     const win = getCurrentWindow();
     try {
       if (await win.isMaximized()) return;
       if (pendingRestore !== null) {
         const scale = await win.scaleFactor();
         const inner = await win.innerSize();
-        await win.setSize(new LogicalSize(pendingRestore.w, inner.toLogical(scale).height));
-        if (pendingRestore.x !== null) {
+        const innerLogical = inner.toLogical(scale);
+        if (pendingRestore.flipped) {
           const pos = await win.outerPosition();
-          await win.setPosition(new PhysicalPosition(pendingRestore.x, pos.y));
+          await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
         }
+        await win.setSize(new LogicalSize(Math.max(MIN_WIN_W, innerLogical.width - PANEL_W), innerLogical.height));
         pendingRestore = null;
       } else if (open && geo === "normal") {
-        void expandGeometry();
+        void expandGeometry(); // queued — runs after this self-heal
       } else if (!open && geo === "expanded") {
         void restoreGeometry();
       }
     } catch (e) {
       console.error("preview resize self-heal failed:", e);
     }
-  })();
+  });
 }

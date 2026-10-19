@@ -116,6 +116,16 @@ fn set_interacting(interacting: bool) -> bool {
     interacting
 }
 
+/// Authoritative mouse-button state for the frontend. Native modal drag/resize
+/// loops (window-edge resize has no JS hook) freeze the webview's hover and
+/// swallow events, so the preview can't tell "drag still in progress" from
+/// "pointer left the window"; Rust reads GetAsyncKeyState directly (same source
+/// as defer_hide_until_mouse_up) so the preview never grace-closes mid-drag.
+#[tauri::command]
+fn is_pointer_held() -> bool {
+    mouse_left_button_down()
+}
+
 fn now_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
@@ -378,7 +388,8 @@ pub fn run() {
             show_window,
             set_pinned,
             get_pinned,
-            set_interacting
+            set_interacting,
+            is_pointer_held
         ]);
 
     app_log("Entering event loop...");
