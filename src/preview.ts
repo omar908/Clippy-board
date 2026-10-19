@@ -1,13 +1,14 @@
 // Full-content preview panel.
 //
-// Shows the complete text / image / file list for the item under the cursor
-// or the keyboard highlight. The main window widens to the right while the
-// panel is open, and the original geometry is restored when it closes.
+// Shows the complete text / image / file list for the currently selected
+// item — a pure view of the one selection state that both the mouse (hover)
+// and the keyboard (arrows) move. The main window widens to the right while
+// the panel is open, and the original geometry is restored when it closes.
 //
 // The module is split so the presentation can be swapped later without
 // touching the experience-defining parts:
 //   1. renderPreviewContent() — pure DOM renderer (item -> panel content)
-//   2. trigger/lifetime below  — hover + keyboard highlight, grace delay
+//   2. trigger/lifetime below  — selection-following + grace delay
 //   3. geometry adapter        — expand/restore the main window (see bottom)
 
 import { getCurrentWindow, currentMonitor, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
@@ -19,10 +20,8 @@ const GRACE_MS = 350;       // close shortly after the cursor leaves the window
 const TEXT_CHAR_CAP = 100_000; // render at most this much text (full fidelity beyond is noise anyway)
 
 interface PreviewHost {
-  /** Currently keyboard-highlighted item (may be null). */
+  /** Currently selected item (the single state hover + arrows move). */
   getSelected: () => ClipboardItem | null;
-  /** Whether an item id is still shown in the list (filters deleted/filtered-out items). */
-  hasItem: (id: string) => boolean;
 }
 
 let host: PreviewHost | null = null;
@@ -31,7 +30,6 @@ let panelEl: HTMLElement;
 let headerEl: HTMLElement;
 let bodyEl: HTMLElement;
 
-let hovered: ClipboardItem | null = null; // sticky: survives moving onto the panel, cleared on nav/leave
 let open = false;
 let renderedId: string | null = null;
 let graceTimer: number | null = null;
@@ -169,12 +167,11 @@ function formatBytes(n: number): string {
 // ---------------------------------------------------------------------------
 
 function sourceItem(): ClipboardItem | null {
-  if (hovered && !host!.hasItem(hovered.id)) hovered = null;
-  return hovered ?? host!.getSelected();
+  return host!.getSelected();
 }
 
-/** shouldOpen: keyboard/nav interactions and cursor-in-window open the panel;
- *  background refreshes (search typing, new captures) only update it. */
+/** shouldOpen: hover/arrow interactions open the panel; background refreshes
+ *  (search typing, new captures) only update it. */
 function update(shouldOpen: boolean): void {
   const item = sourceItem();
   if (!item) { previewDismiss(); return; }
@@ -195,14 +192,11 @@ function openPanel(item: ClipboardItem): void {
   void expandGeometry();
 }
 
-/** Close the panel and restore the window geometry. Idempotent.
- *  Also drops the hover context: after a hide (copy, Esc, blur), a re-summoned
- *  window starts from the keyboard highlight, not from a stale hover. */
+/** Close the panel and restore the window geometry. Idempotent. */
 export function previewDismiss(): void {
   if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
   const wasOpen = open;
   open = false;
-  hovered = null;
   renderedId = null;
   if (wasOpen) {
     panelEl.classList.remove("open");
@@ -222,23 +216,10 @@ function cancelGrace(): void {
   if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
 }
 
-/** Card hover. Null clears the sticky hover (kept across panel, cleared on window leave). */
-export function previewHover(item: ClipboardItem | null): void {
-  hovered = item;
+/** The selection moved (hover or arrow key — same state): follow it. */
+export function previewSelectionChanged(): void {
   cancelGrace();
   update(true);
-}
-
-/** Keyboard highlight moved: follow the selection, drop sticky hover. */
-export function previewNavigate(): void {
-  hovered = null;
-  cancelGrace();
-  update(true);
-}
-
-/** Currently hovered item (sticky) — lets keyboard nav re-anchor to it. */
-export function previewHovered(): ClipboardItem | null {
-  return hovered;
 }
 
 /** Background refresh: re-render if open, close if the item is gone. Never opens. */
@@ -254,12 +235,10 @@ export function initPreview(hostApi: PreviewHost): void {
   headerEl = document.getElementById("preview-header")!;
   bodyEl = document.getElementById("preview-body")!;
 
-  // The panel opens from card hover or keyboard navigation only — hovering
-  // window chrome (header, footer, search) must not open it. Leaving the
-  // window closes it after a short grace period; the hover stays sticky
-  // while the cursor is inside (moving onto the panel/header keeps it).
+  // The panel opens from card hover or arrow keys only — hovering window
+  // chrome (header, footer, search) must not open it. Leaving the window
+  // closes it after a short grace period.
   popupEl.addEventListener("mouseleave", () => {
-    hovered = null;
     startGrace();
   });
 

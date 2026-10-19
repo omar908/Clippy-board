@@ -9,7 +9,7 @@
 
 The list shows only a one-line preview per item, so **large copies are unidentifiable** — several multi-thousand-char text copies or similar screenshots look identical, and the user can't tell which item Enter will restore. The fix is a full-content preview driven by the two selection signals:
 
-- **Hover** — preview the card under the cursor. The previewed item **is** the copy target: Enter copies whatever is shown, hovered or highlighted — one uniform flow for mouse, keyboard, and hybrid use (originally specified as "hover must not change what Enter copies"; revised after user testing, see Decision below).
+- **Hover** — preview the card under the cursor. Hover and keyboard navigation must feel like **one flow with two inputs** (user requirement, 2026-10-18): a single selection state, previewed and copied identically whichever input moved it.
 - **Keyboard highlight** — preview the item arrow keys are on, even with the cursor elsewhere.
 
 Two presentation shapes were on the table:
@@ -33,9 +33,10 @@ Verified platform facts that constrain the design:
    - Geometry operations are guarded by a busy flag and serialized through one async path; an `onResized` self-heal reconciles maximize/unmaximize transitions with panel state.
 
 2. **Trigger + lifetime: interaction opens, cursor departure closes.**
-   - Opens on **card hover** or on arrow-key highlight movement — never on summon, and **never from hovering window chrome** (header, footer, search; user feedback 2026-10-18): the panel only appears where an item is actually pointed at or highlighted.
-   - **Enter copies exactly what the preview shows** — the hovered card when the cursor is over one, otherwise the keyboard highlight (user decision 2026-10-18, replacing the earlier "hover never changes the copy target" rule: one uniform activation target for mouse, keyboard, and hybrid use). The first arrow key after hovering re-anchors the highlight to the hovered card, then moves one step — keyboard navigation continues where the user is looking, not where the highlight last was. Copying/hiding clears the hover context, so a re-summoned window starts from the keyboard highlight again.
-   - The hover is **sticky within the window**: moving from a card onto the panel, header, or footer keeps it. Stays while the cursor is over the window; **350 ms grace** after the cursor leaves, then the panel closes and geometry is restored. Esc / ✕ / Enter-copy restore the geometry **after** the hide resolves, so it happens while the window is invisible.
+   - Opens on **card hover** or on arrow-key movement — never on summon, and **never from hovering window chrome** (header, footer, search; user feedback 2026-10-18): the panel only appears where an item is actually pointed at or highlighted.
+   - **One selection, two traversals** (user decision 2026-10-18, superseding both the original "hover never changes the copy target" rule and the interim "Enter copies the hovered card" rule): hovering a card **moves the keyboard highlight** to it — the same single state the arrow keys move. The preview always shows the highlight, Enter always copies it, click still copies the clicked card directly. No per-input copy targets, no hover/selection handoff logic.
+   - **Keyboard takeover of the mouse:** a stationary cursor re-fires hover after every re-render, which would pin the selection next to the mouse (you couldn't arrow more than one card away — observed in testing). The first arrow key hands control to the keyboard: the cursor is hidden (`cursor: none` on body) and hover updates are ignored until the pointer **physically moves** — re-dispatches at the same coordinates are discarded. A real pointer move re-engages the mouse; hide or focus-loss also ends the takeover.
+   - Stays while the cursor is over the window; **350 ms grace** after the cursor leaves, then the panel closes and geometry is restored. Esc / ✕ / Enter-copy restore the geometry **after** the hide resolves, so it happens while the window is invisible.
 
 3. **Rust emits `window-hidden` from a single `hide_main_window(&AppHandle)` helper that every hide path routes through** (`select_item`, `hide_window`, blur-hide, deferred drag-hide, `toggle_window`, close-request). The frontend listens and restores the pre-preview geometry while the window is invisible. This exists solely because of the WebView2 visibility limitation above — without it, blur-hiding a widened window left it permanently wide for the next summon (caught in testing).
 
@@ -63,5 +64,5 @@ Verified platform facts that constrain the design:
 
 **Rules for future work**
 - Every new `window.hide()` call site **must** go through `hide_main_window()` — a bare `window.hide()` silently skips the frontend restore (this is what `select_item`, blur, and the tray/close paths were converted to).
-- Preview logic must never call `invoke("select_item" | ...)` or manipulate `selectedIndex` — it reads state through `host.getSelected()` / `host.hasItem()` only, keeping the preview a pure view of the activation target (hovered ?? highlighted) and leaving copy/selection decisions to `main.ts`.
+- Preview logic must never call `invoke("select_item" | ...)` or manipulate `selectedIndex` — it reads state through `host.getSelected()` only, keeping the preview a pure view of the selection and leaving all selection/copy decisions to `main.ts`.
 - If pivoting to a separate hover window: replace only the geometry adapter section (expand/collapse → show/hide + position of the second window) and the panel DOM (aside → popup `<body>` container); the renderer and trigger/lifetime sections should carry over unchanged. That carry-over is the reason this ADR exists — validate it, and if it doesn't hold, record what broke here.

@@ -4,9 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem } from "./types";
 import {
   initPreview,
-  previewHover,
-  previewNavigate,
-  previewHovered,
+  previewSelectionChanged,
   previewRefresh,
   previewDismiss,
   previewHandleResize,
@@ -215,8 +213,24 @@ function renderList() {
       selectItem(item.id);
     };
 
-    // Hover shows the full-content preview (never changes what Enter copies)
-    card.addEventListener("mouseenter", () => previewHover(item));
+    // Hover is one of the two traversals of the same flow: it moves the
+    // selection to the card under the cursor. Ignored while the keyboard
+    // owns the flow (see the takeover note above).
+    card.addEventListener("mouseenter", (e) => {
+      if (keyboardOwns) {
+        // A stationary cursor re-dispatched after re-render keeps keyboard
+        // control; only a pointer that actually moved re-engages the mouse.
+        if (e.clientX === pointerAtTakeover.x && e.clientY === pointerAtTakeover.y) return;
+        releaseKeyboard();
+      }
+      const idx = filteredHistory.findIndex((i) => i.id === item.id);
+      if (idx === -1) return;
+      if (idx !== selectedIndex) {
+        selectedIndex = idx;
+        renderList();
+      }
+      previewSelectionChanged(); // hovering the already-selected card still opens the panel
+    });
 
     historyList.appendChild(card);
   });
@@ -270,19 +284,37 @@ async function fetchInitialHistory() {
   }
 }
 
-// The hovered card, if it is still in the filtered list.
-function validHover(): ClipboardItem | null {
-  const h = previewHovered();
-  return h && filteredHistory.some((i) => i.id === h.id) ? h : null;
+// --- Keyboard takeover of the mouse -----------------------------------------
+// Hover and arrows move the same selection (hover IS selection). But a
+// stationary cursor re-fires hover after every re-render, which would pin
+// the selection next to the mouse — you couldn't arrow more than one card
+// away. So the first arrow key hands control to the keyboard: the cursor is
+// hidden (CSS) and hover updates are ignored until the pointer physically
+// moves (same-coordinate re-dispatches are discarded).
+let keyboardOwns = false;
+let pointerAtTakeover = { x: 0, y: 0 };
+let lastPointer = { x: 0, y: 0 };
+
+function takeOverForKeyboard(): void {
+  pointerAtTakeover = lastPointer;
+  if (!keyboardOwns) {
+    keyboardOwns = true;
+    document.body.classList.add("keyboard-nav");
+  }
 }
 
-// Keyboard navigation continues from wherever the user is looking: the first
-// arrow key after hovering a card re-anchors the highlight there, then moves
-// one step from there.
-function reanchorToHover(): void {
-  const h = validHover();
-  if (h) selectedIndex = filteredHistory.findIndex((i) => i.id === h.id);
+function releaseKeyboard(): void {
+  if (!keyboardOwns) return;
+  keyboardOwns = false;
+  document.body.classList.remove("keyboard-nav");
 }
+
+window.addEventListener("mousemove", (e) => {
+  lastPointer = { x: e.clientX, y: e.clientY };
+  if (keyboardOwns && (e.clientX !== pointerAtTakeover.x || e.clientY !== pointerAtTakeover.y)) {
+    releaseKeyboard();
+  }
+});
 
 // Keyboard Navigation
 window.addEventListener("keydown", (e) => {
@@ -293,24 +325,24 @@ window.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
-      reanchorToHover();
+      takeOverForKeyboard();
       selectedIndex = Math.min(selectedIndex + 1, filteredHistory.length - 1);
       renderList();
-      previewNavigate();
+      previewSelectionChanged();
     }
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
     if (filteredHistory.length > 0) {
-      reanchorToHover();
+      takeOverForKeyboard();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       renderList();
-      previewNavigate();
+      previewSelectionChanged();
     }
   } else if (e.key === "Enter") {
     e.preventDefault();
-    // Enter copies exactly what the preview shows: the hovered card when
-    // the cursor is over one, otherwise the keyboard highlight.
-    const target = validHover() ?? filteredHistory[selectedIndex] ?? null;
+    // One flow: Enter always copies the highlighted item — whichever input
+    // (hover or arrows) last moved the highlight.
+    const target = filteredHistory[selectedIndex];
     if (target) {
       selectItem(target.id);
     }
@@ -410,6 +442,9 @@ window.addEventListener("focus", () => {
   searchInput.select();
 });
 
+// Leaving the window (focus loss) also ends the keyboard takeover.
+window.addEventListener("blur", () => releaseKeyboard());
+
 // Keep the preview geometry consistent across maximize/unmaximize and user resizes
 getCurrentWindow()
   .onResized(() => previewHandleResize())
@@ -425,13 +460,14 @@ async function setupListener() {
     updateCounts();
     filterAndRender();
   });
+  // Each window session starts mouse-ready: keyboard takeover ends on hide.
+  await listen("window-hidden", () => releaseKeyboard());
 }
 
 // Initialization
 window.addEventListener("DOMContentLoaded", () => {
   initPreview({
     getSelected: () => filteredHistory[selectedIndex] ?? null,
-    hasItem: (id) => filteredHistory.some((i) => i.id === id),
   });
   searchInput.focus();
   fetchInitialHistory();

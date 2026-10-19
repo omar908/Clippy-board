@@ -667,3 +667,11 @@ kbd {
   font-size: 10px;
   color: var(--text-primary);
 }
+
+
+/* Keyboard owns the flow: the pointer is hidden until it moves again */
+body.keyboard-nav,
+body.keyboard-nav * {
+  cursor: none !important;
+}
+
