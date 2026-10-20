@@ -234,6 +234,7 @@ html, body {
    footer — they're anchored to this column, whose screen position is
    invariant (the flip keeps it exactly in place). */
 .list-column {
+  position: relative; /* anchors the resize grip to the main GUI, not the popup */
   display: flex;
   flex-direction: column;
   flex: 1;

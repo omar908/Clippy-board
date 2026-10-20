@@ -354,6 +354,20 @@ function queueGeoOp(op: () => Promise<void>): Promise<void> {
   return geoQueue;
 }
 
+// Our own geometry writes also emit resize events. The hover guard that
+// protects against layout-induced mouseenter must not arm for those: the
+// panel opening/closing does not move the list under the cursor, and a
+// guard here would swallow the user's next real hover.
+let lastSelfResizeAt = 0;
+
+function markSelfResize(): void {
+  lastSelfResizeAt = Date.now();
+}
+
+export function previewOwnResizeRecently(): boolean {
+  return Date.now() - lastSelfResizeAt <= 300;
+}
+
 function panelPx(scale: number): number {
   return Math.round(PANEL_W * scale);
 }
@@ -387,6 +401,7 @@ function expandGeometry(): Promise<void> {
         }
       }
 
+      markSelfResize();
       await win.setSize(new LogicalSize(innerLogical.width + PANEL_W, innerLogical.height));
       if (flippedLeft) await win.setPosition(new PhysicalPosition(newX, outer.y));
       panelEl.classList.toggle("panel-left", flippedLeft);
@@ -417,6 +432,7 @@ function restoreGeometry(): Promise<void> {
       // own drags included. (An unflipped panel widens rightward, so the
       // shrink is invisible on screen and no shift is needed.)
       if (flippedLeft) {
+        markSelfResize();
         const pos = await win.outerPosition();
         await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
       }
@@ -426,6 +442,7 @@ function restoreGeometry(): Promise<void> {
       // list width the user created instead of a pre-expand cache (whose
       // mismatch check skipped restoration entirely after any user resize).
       const targetW = Math.max(MIN_WIN_W, innerLogical.width - PANEL_W);
+      markSelfResize();
       await win.setSize(new LogicalSize(targetW, innerLogical.height));
     } catch (e) {
       console.error("preview restore failed:", e);
@@ -449,8 +466,10 @@ export function previewHandleResize(): void {
         const innerLogical = inner.toLogical(scale);
         if (pendingRestore.flipped) {
           const pos = await win.outerPosition();
+          markSelfResize();
           await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
         }
+        markSelfResize();
         await win.setSize(new LogicalSize(Math.max(MIN_WIN_W, innerLogical.width - PANEL_W), innerLogical.height));
         pendingRestore = null;
       } else if (open && geo === "normal") {

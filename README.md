@@ -179,3 +179,4 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0003](./docs/adr/0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only |
 | [0004](./docs/adr/0004-persistent-history-sqlite.md) | Persistent history via SQLite, full image + display thumbnail |
 | [0005](./docs/adr/0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) |
+| [0006](./docs/adr/0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize |

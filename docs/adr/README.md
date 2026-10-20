@@ -64,3 +64,4 @@ this decision imposes on future work.
 | [0003](0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only | Accepted |
 | [0004](0004-persistent-history-sqlite.md) | Persistent history via SQLite, with full image + display thumbnail | Accepted |
 | [0005](0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) | Accepted |
+| [0006](0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize | Accepted |

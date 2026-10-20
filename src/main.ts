@@ -10,6 +10,7 @@ import {
   previewHandleResize,
   previewNativeDragStart,
   previewNativeDragEnd,
+  previewOwnResizeRecently,
 } from "./preview";
 
 let history: ClipboardItem[] = [];
@@ -212,16 +213,8 @@ function renderList() {
     // (keyboard takeover, or right after a copy re-rendered the list under
     // a parked cursor), only a pointer that actually moved re-engages hover.
     card.addEventListener("mouseenter", (e) => {
-      if (hoverAnchor && e.clientX === hoverAnchor.x && e.clientY === hoverAnchor.y) return;
-      hoverAnchor = null;
-      if (keyboardOwns) releaseKeyboard();
-      const idx = filteredHistory.findIndex((i) => i.id === item.id);
-      if (idx === -1) return;
-      if (idx !== selectedIndex) {
-        selectedIndex = idx;
-        renderList();
-      }
-      previewSelectionChanged(); // hovering the already-selected card still opens the panel
+      if (hoverResizeGuard) return;
+      hoverCard(item.id, e.clientX, e.clientY);
     });
 
     historyList.appendChild(card);
@@ -299,6 +292,35 @@ let keyboardOwns = false;
 let hoverAnchor: { x: number; y: number } | null = null;
 let lastPointer = { x: 0, y: 0 };
 
+// A native resize can slide list content under a parked cursor: Chrome then
+// re-hit-tests the layout and fires mousemove/mouseenter at the new position
+// even though the pointer never traveled there. Hover must not act on those
+// events, or shrinking the window pops the preview open mid-drag (user-
+// reported). Arm this on every user resize and keep it until the pointer has
+// produced two distinct positions - proof of real movement, which synthetic
+// re-hit-tests never do.
+let hoverResizeGuard = false;
+let hoverGuardPos: { x: number; y: number } | null = null;
+
+function armHoverResizeGuard(): void {
+  hoverResizeGuard = true;
+  hoverGuardPos = null;
+}
+
+/** Move the selection/preview to a card as a direct result of hovering it. */
+function hoverCard(id: string, x: number, y: number): void {
+  if (hoverAnchor && x === hoverAnchor.x && y === hoverAnchor.y) return;
+  hoverAnchor = null;
+  if (keyboardOwns) releaseKeyboard();
+  const idx = filteredHistory.findIndex((i) => i.id === id);
+  if (idx === -1) return;
+  if (idx !== selectedIndex) {
+    selectedIndex = idx;
+    renderList();
+  }
+  previewSelectionChanged(); // hovering the already-selected card still opens the panel
+}
+
 function takeOverForKeyboard(): void {
   hoverAnchor = lastPointer;
   if (!keyboardOwns) {
@@ -316,6 +338,20 @@ function releaseKeyboard(): void {
 
 window.addEventListener("mousemove", (e) => {
   lastPointer = { x: e.clientX, y: e.clientY };
+  if (hoverResizeGuard) {
+    if (!hoverGuardPos) {
+      hoverGuardPos = { x: e.clientX, y: e.clientY };
+    } else if (e.clientX !== hoverGuardPos.x || e.clientY !== hoverGuardPos.y) {
+      // Real movement: the user owns the pointer again. Re-evaluate whatever
+      // is under it - the blocked mouseenter will not fire a second time when
+      // the pointer already sits on that card.
+      hoverResizeGuard = false;
+      const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)
+        ?.closest(".history-item") as HTMLElement | null;
+      const id = el?.dataset.id;
+      if (id) hoverCard(id, e.clientX, e.clientY);
+    }
+  }
   if (keyboardOwns && hoverAnchor && (e.clientX !== hoverAnchor.x || e.clientY !== hoverAnchor.y)) {
     releaseKeyboard();
   }
@@ -456,7 +492,10 @@ window.addEventListener("blur", () => releaseKeyboard());
 
 // Keep the preview geometry consistent across maximize/unmaximize and user resizes
 getCurrentWindow()
-  .onResized(() => previewHandleResize())
+  .onResized(() => {
+    if (!previewOwnResizeRecently()) armHoverResizeGuard();
+    previewHandleResize();
+  })
   .catch(() => {});
 
 // Setup real-time clipboard listener
