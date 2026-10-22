@@ -351,11 +351,16 @@ function handleListKey(key: string): void {
 
 // Keyboard Navigation
 window.addEventListener("keydown", (e) => {
+  const navKey = e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter";
+  // Modifier+arrow means "extend the text selection in the preview", not
+  // "move the list selection" — leave those to the browser.
+  const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
+
   // In the preview window the keys belong to the main window's list: forward
   // them so arrow traversal keeps working while the pointer is in the preview
   // (the preview has focus so the user can select text).
   if (isPreviewWindow) {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+    if (navKey && !modified) {
       e.preventDefault();
       void emitTo("main", "preview-forward-key", { key: e.key }).catch(() => {});
     } else if (e.key === "Escape") {
@@ -369,7 +374,7 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     // Hide first, then restore the pre-preview geometry while invisible.
     invoke("hide_window").then(() => previewDismiss()).catch(() => {});
-  } else if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+  } else if (navKey && !modified) {
     e.preventDefault();
     handleListKey(e.key);
   }

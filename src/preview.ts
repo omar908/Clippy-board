@@ -25,8 +25,17 @@ interface PreviewHost {
 let host: PreviewHost | null = null;
 let headerEl: HTMLElement;
 let bodyEl: HTMLElement;
+let panelEl: HTMLElement | null = null;
+
+/** How the preview is presented. "window" is the separate always-on-top
+ *  window used whenever there is room beside the main window; "docked" is the
+ *  in-window panel, used when the main window leaves no room on either side
+ *  (maximized, or resized wider than the work area allows). "none" means
+ *  nothing is showing. */
+type PreviewMode = "none" | "window" | "docked";
 
 let open = false;
+let mode: PreviewMode = "none";
 let renderedId: string | null = null;
 let graceTimer: number | null = null;
 let holdUntil = 0;            // epoch ms — no grace dismissal before this (resize stream)
@@ -185,8 +194,12 @@ function update(shouldOpen: boolean): void {
     if (shouldOpen) void openPanel(item);
     return;
   }
-  if (renderedId !== item.id) {
-    renderedId = item.id;
+  if (renderedId === item.id) return;
+  renderedId = item.id;
+  if (mode === "docked") {
+    // Docked preview shares this window's DOM, so render in place.
+    renderPreviewContent(headerEl, bodyEl, item);
+  } else {
     // The preview is a separate window: push the new content through Rust so
     // the pre-rendered item reaches the preview window's DOM.
     void invoke("preview_update", { item }).catch(() => {});
@@ -197,11 +210,11 @@ async function openPanel(item: ClipboardItem): Promise<void> {
   renderedId = item.id;
   open = true;
   startTracking();
-  // Rust shows the window and delivers the item in one call (reliable path).
-  await showPreview(item);
+  const p = await computePreviewPlacement(getCurrentWindow());
+  await applyPlacement(p, item);
 }
 
-/** Close the preview window. Idempotent. */
+/** Close the preview. Idempotent. Handles both presentations. */
 export function previewDismiss(): void {
   if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
   const wasOpen = open;
@@ -209,11 +222,19 @@ export function previewDismiss(): void {
   renderedId = null;
   if (wasOpen) {
     bodyEl.replaceChildren(); // drop the full-size image for GC
+    if (panelEl) {
+      panelEl.classList.remove("open");
+      panelEl.setAttribute("aria-hidden", "true");
+    }
+    // Also hides the separate window (a no-op while docked) and clears
+    // PREVIEW_OPEN so the main window resumes its normal auto-hide.
     void invoke("preview_hide").catch(() => {});
     stopTracking();
     // Tell the preview window to reset its mirrored state.
     void emitTo("preview", "preview-hidden", {}).catch(() => {});
   }
+  // A fresh open re-resolves the presentation from scratch.
+  mode = "none";
 }
 
 function startGrace(): void {
@@ -327,6 +348,7 @@ export function initPreview(hostApi: PreviewHost): void {
   host = hostApi;
   headerEl = document.getElementById("preview-header")!;
   bodyEl = document.getElementById("preview-body")!;
+  panelEl = document.getElementById("preview-panel");
 
   // Leaving the main window arms the grace close; entering cancels it. Moving
   // the cursor across to the preview window recomposes inside the grace window
@@ -393,16 +415,16 @@ function initPreviewWindow(): void {
   // keyboard traversal keeps working. Leaving also (after the grace period)
   // asks the main window to close the preview — main is the sole owner of the
   // open/close state, which keeps the two windows from desyncing.
-  const panelEl = document.getElementById("preview-panel");
-  if (panelEl) {
-    panelEl.addEventListener("mouseenter", () => {
+  const pvPanel = document.getElementById("preview-panel");
+  if (pvPanel) {
+    pvPanel.addEventListener("mouseenter", () => {
       cancelGrace();
       // Tell main to cancel its own grace too: the cursor left main's area to
       // get here, which armed main's grace, and nothing else would clear it.
       void emitTo("main", "preview-cancel-close", {}).catch(() => {});
       void invoke("preview_set_interactive", { interactive: true }).catch(() => {});
     });
-    panelEl.addEventListener("mouseleave", () => {
+    pvPanel.addEventListener("mouseleave", () => {
       void invoke("preview_set_interactive", { interactive: false }).catch(() => {});
       if (open) startGrace();
     });
@@ -415,8 +437,23 @@ function initPreviewWindow(): void {
 // the main window's move/resize. The main window itself never changes size.
 // ---------------------------------------------------------------------------
 
-/** Physical rectangle of the main window plus the placement for the preview. */
-async function computePreviewPlacement(win: ReturnType<typeof getCurrentWindow>) {
+/** A resolved presentation for the preview: either a separate window rectangle
+ *  (physical px), or "docked" — render the panel inside the main window. */
+interface Placement {
+  docked: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Resolve where the preview should go for the main window's current geometry.
+ *
+ *  Preference order: right of the window, then left of it, then docked inside
+ *  it. "Fits" means the whole window would land inside the monitor's work
+ *  area — a clamped position that overlaps the main window is not a fit, since
+ *  the preview would cover the list it is previewing. */
+async function computePreviewPlacement(win: ReturnType<typeof getCurrentWindow>): Promise<Placement> {
   const scale = await win.scaleFactor();
   const pos = await win.outerPosition();     // physical
   const size = await win.outerSize();        // physical
@@ -426,18 +463,35 @@ async function computePreviewPlacement(win: ReturnType<typeof getCurrentWindow>)
   const previewW = Math.round(PREVIEW_W * scale);
   const previewH = size.height;
 
-  // Prefer the right side; flip to the left when it would overflow the work
-  // area (so the list column keeps its exact screen position).
-  let x = pos.x + size.width + gap;
-  const y = pos.y;
   if (mon) {
     const waLeft = mon.workArea.position.x;
     const waRight = waLeft + mon.workArea.size.width;
-    if (x + previewW > waRight) {
-      x = Math.max(waLeft, pos.x - previewW - gap);
+
+    // Right of the window.
+    const rightX = pos.x + size.width + gap;
+    if (rightX + previewW <= waRight) {
+      return { docked: false, x: rightX, y: pos.y, width: previewW, height: previewH };
     }
+
+    // Left of the window (flipped so the list keeps its screen position).
+    const leftX = pos.x - previewW - gap;
+    if (leftX >= waLeft) {
+      return { docked: false, x: leftX, y: pos.y, width: previewW, height: previewH };
+    }
+  } else {
+    // No monitor information: assume there is room on the right.
+    return {
+      docked: false,
+      x: pos.x + size.width + gap,
+      y: pos.y,
+      width: previewW,
+      height: previewH,
+    };
   }
-  return { x, y, width: previewW, height: previewH };
+
+  // Neither side fits: the window is (near) as wide as the work area. Dock the
+  // panel inside the main window instead of covering the list.
+  return { docked: true, x: 0, y: 0, width: previewW, height: previewH };
 }
 
 /**
@@ -457,22 +511,60 @@ function scheduleReposition(): void {
   });
 }
 
-/** Position the preview window beside the main window (physical coords). */
+/** Frame the separate preview window at `p` (physical px). */
+async function movePreviewWindow(p: Placement): Promise<void> {
+  await invoke("preview_position", { x: p.x, y: p.y });
+  await invoke("preview_set_size", { width: p.width, height: p.height });
+}
+
+/** Adopt `p` as the presentation for `item`, switching mode if needed.
+ *  Called both when opening and on every reposition, so it must be cheap when
+ *  the mode has not changed. */
+async function applyPlacement(p: Placement, item: ClipboardItem): Promise<void> {
+  if (p.docked) {
+    if (mode === "docked") return; // already docked; content handled by update()
+    mode = "docked";
+    // Remove the separate window: this also clears PREVIEW_OPEN in Rust, so
+    // the main window's normal auto-hide-on-blur behaviour resumes.
+    await invoke("preview_hide").catch(() => {});
+    void emitTo("preview", "preview-hidden", {}).catch(() => {});
+    if (panelEl) {
+      panelEl.classList.add("open");
+      panelEl.setAttribute("aria-hidden", "false");
+    }
+    renderPreviewContent(headerEl, bodyEl, item);
+    renderedId = item.id;
+    return;
+  }
+
+  if (mode !== "window") {
+    // No separate window is up yet (either nothing is showing, or the preview
+    // was docked): show the window and move the content out of this DOM.
+    mode = "window";
+    if (panelEl) {
+      panelEl.classList.remove("open");
+      panelEl.setAttribute("aria-hidden", "true");
+    }
+    bodyEl.replaceChildren(); // drop any docked copy
+    await invoke("preview_show", { x: p.x, y: p.y, width: p.width, height: p.height, item });
+    renderedId = item.id;
+    return;
+  }
+
+  await movePreviewWindow(p);
+}
+
+/** Position/resolve the preview for the main window's current geometry. */
 async function positionPreview(): Promise<void> {
   if (!open) return;
+  const item = sourceItem();
+  if (!item) { previewDismiss(); return; }
   try {
     const p = await computePreviewPlacement(getCurrentWindow());
-    await invoke("preview_position", { x: p.x, y: p.y });
-    await invoke("preview_set_size", { width: p.width, height: p.height });
+    await applyPlacement(p, item);
   } catch {
     /* window may be mid-teardown; ignore */
   }
-}
-
-/** Show the preview window with the given item. */
-async function showPreview(item: ClipboardItem): Promise<void> {
-  const p = await computePreviewPlacement(getCurrentWindow());
-  await invoke("preview_show", { x: p.x, y: p.y, width: p.width, height: p.height, item });
 }
 
 /** Start tracking the main window's geometry (idempotent). */
