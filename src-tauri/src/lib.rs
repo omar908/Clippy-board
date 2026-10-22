@@ -17,6 +17,8 @@ static WINDOW_POSITIONED: AtomicBool = AtomicBool::new(false);
 /// Native move/resize enters a modal loop that reports a focus loss to
 /// WebView2 — without this flag the auto-hide would fire mid-drag.
 static USER_INTERACTING: AtomicBool = AtomicBool::new(false);
+/// Whether the preview window is currently open.
+static PREVIEW_OPEN: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
 fn get_history(state: State<ClipboardState>) -> Vec<ClipboardItem> {
@@ -85,6 +87,12 @@ fn hide_main_window(app: &AppHandle) {
         let _ = window.hide();
         let _ = app.emit("window-hidden", ());
     }
+    // The preview window must never outlive the main window: hide it directly
+    // (authoritative) rather than relying on the frontend round-trip.
+    if let Some(preview) = app.get_webview_window("preview") {
+        let _ = preview.hide();
+    }
+    PREVIEW_OPEN.store(false, Ordering::SeqCst);
 }
 
 #[tauri::command]
@@ -116,6 +124,82 @@ fn set_interacting(interacting: bool) -> bool {
     interacting
 }
 
+/// Show the preview window at the given position and size, and deliver the
+/// item to render. The item is emitted from Rust (the canonical Emitter path)
+/// rather than from window-to-window JS, which proved unreliable.
+#[tauri::command]
+fn preview_show(
+    app: AppHandle,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    item: serde_json::Value,
+) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("preview") {
+        // Flag must be set BEFORE show(): showing can synchronously deliver a
+        // focus loss to the main window, whose handler would otherwise hide it.
+        PREVIEW_OPEN.store(true, Ordering::SeqCst);
+        // Re-assert the non-activating style (defensive — show() is a no-op for
+        // a window that already has it).
+        make_non_activating(&win);
+        let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: width as u32, height: height as u32 }));
+        let _ = win.show();
+        // Keep keyboard focus on the main window so arrow-key traversal works.
+        if let Some(main_win) = app.get_webview_window("main") {
+            let _ = main_win.set_focus();
+        }
+        // Deliver the content from Rust — reliable regardless of the JS
+        // listener attach timing.
+        let _ = app.emit_to("preview", "preview-content", item);
+        Ok(())
+    } else {
+        Err("Preview window not found".into())
+    }
+}
+
+/// Deliver updated content to the (already visible) preview window.
+#[tauri::command]
+fn preview_update(app: AppHandle, item: serde_json::Value) -> Result<(), String> {
+    let _ = app.emit_to("preview", "preview-content", item);
+    Ok(())
+}
+
+/// Hide the preview window.
+#[tauri::command]
+fn preview_hide(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("preview") {
+        let _ = win.hide();
+        PREVIEW_OPEN.store(false, Ordering::SeqCst);
+        Ok(())
+    } else {
+        Err("Preview window not found".into())
+    }
+}
+
+/// Reposition the preview window.
+#[tauri::command]
+fn preview_position(app: AppHandle, x: i32, y: i32) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("preview") {
+        let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        Ok(())
+    } else {
+        Err("Preview window not found".into())
+    }
+}
+
+/// Resize the preview window.
+#[tauri::command]
+fn preview_set_size(app: AppHandle, width: i32, height: i32) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("preview") {
+        let _ = win.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: width as u32, height: height as u32 }));
+        Ok(())
+    } else {
+        Err("Preview window not found".into())
+    }
+}
+
 /// Authoritative mouse-button state for the frontend. Native modal drag/resize
 /// loops (window-edge resize has no JS hook) freeze the webview's hover and
 /// swallow events, so the preview can't tell "drag still in progress" from
@@ -144,6 +228,71 @@ fn mouse_left_button_down() -> bool {
 #[cfg(not(windows))]
 fn mouse_left_button_down() -> bool {
     false
+}
+
+/// Make a window non-activating: it can be shown on top without ever taking
+/// focus from the window that currently has it. This is what lets the preview
+/// window appear beside the main window while arrow-key traversal keeps working
+/// (the main window never sees a focus loss).
+#[cfg(windows)]
+fn make_non_activating(win: &tauri::WebviewWindow) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
+    };
+    if let Ok(hwnd) = win.hwnd() {
+        unsafe {
+            let h = hwnd.0 as _;
+            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+            SetWindowLongPtrW(h, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE as isize);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn make_non_activating(_win: &tauri::WebviewWindow) {}
+
+/// Toggle whether the preview window may take focus. Off (the default while the
+/// user is traversing the main list) it is non-activating, so showing it never
+/// steals focus from `main` and arrow keys keep working. On — while the pointer
+/// is inside the preview — it becomes a normal window so the user can select
+/// and copy text with the mouse.
+#[cfg(windows)]
+fn set_preview_activatable(win: &tauri::WebviewWindow, activatable: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
+    };
+    if let Ok(hwnd) = win.hwnd() {
+        unsafe {
+            let h = hwnd.0 as _;
+            let ex = GetWindowLongPtrW(h, GWL_EXSTYLE);
+            let new = if activatable {
+                ex & !(WS_EX_NOACTIVATE as isize)
+            } else {
+                ex | (WS_EX_NOACTIVATE as isize)
+            };
+            SetWindowLongPtrW(h, GWL_EXSTYLE, new);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn set_preview_activatable(_win: &tauri::WebviewWindow, _activatable: bool) {}
+
+/// Called when the pointer enters/leaves the preview window. Entering makes the
+/// preview activatable and gives it focus (so text can be selected); leaving
+/// makes it non-activating again and returns focus to the main window so
+/// keyboard traversal resumes.
+#[tauri::command]
+fn preview_set_interactive(app: AppHandle, interactive: bool) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("preview") {
+        set_preview_activatable(&win, interactive);
+        if interactive {
+            let _ = win.set_focus();
+        } else if let Some(main_win) = app.get_webview_window("main") {
+            let _ = main_win.set_focus();
+        }
+    }
+    Ok(())
 }
 
 /// Hide the window once the left mouse button is released.
@@ -247,7 +396,7 @@ pub fn run() {
             app_log("Setup hook entered");
 
             // Create main window — start hidden (popup model: shown via shortcut/tray)
-            match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+            let _main_win = match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title("Clippy")
                 .inner_size(460.0, 580.0)
                 .min_inner_size(360.0, 420.0)
@@ -256,13 +405,45 @@ pub fn run() {
                 .shadow(true)
                 .always_on_top(true)
                 .skip_taskbar(true)
-                .visible(false)   // Start hidden – summoned via Ctrl+Shift+Space or tray
+                .visible(false)   // Start hidden — summoned via Ctrl+Shift+Space or tray
                 .center()
                 .build()
             {
-                Ok(win) => app_log(&format!("WebviewWindow built: label={}", win.label())),
-                Err(e) => app_log(&format!("WebviewWindow build FAILED: {}", e)),
-            }
+                Ok(win) => {
+                    app_log(&format!("WebviewWindow built: label={}", win.label()));
+                    win
+                }
+                Err(e) => {
+                    app_log(&format!("WebviewWindow build FAILED: {}", e));
+                    return Err(e.into());
+                }
+            };
+
+            // Create preview window — separate always-on-top window. It is made
+            // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
+            // from the main window; arrow-key traversal keeps working.
+            let _preview_win = match tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
+                .title("Clippy Preview")
+                .inner_size(480.0, 580.0)
+                .resizable(false)
+                .decorations(false)
+                .shadow(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .focused(false)
+                .visible(false)   // Shown only while a selection preview is active
+                .build()
+            {
+                Ok(win) => {
+                    make_non_activating(&win);
+                    app_log(&format!("Preview window built: label={}", win.label()));
+                    win
+                }
+                Err(e) => {
+                    app_log(&format!("Preview window build FAILED: {}", e));
+                    return Err(e.into());
+                }
+            };
 
             // Open persistent history storage (falls back to in-memory-only on failure)
             match app.path().app_data_dir() {
@@ -353,11 +534,18 @@ pub fn run() {
                     api.prevent_close();
                 }
                 tauri::WindowEvent::Focused(false) => {
+                    // Only the main window owns the auto-hide behaviour; the
+                    // preview window losing focus is normal and irrelevant.
+                    if window.label() != "main" {
+                        return;
+                    }
                     // Hide when focus is lost, but only after a grace period from last show
                     // to avoid immediately hiding when first summoned. Never hide while a
                     // native drag/resize is in progress (that reports a focus loss too).
+                    // Don't hide if preview window is open
                     if !IS_PINNED.load(Ordering::SeqCst)
                         && !USER_INTERACTING.load(Ordering::SeqCst)
+                        && !PREVIEW_OPEN.load(Ordering::SeqCst)
                     {
                         let shown_at = WINDOW_SHOWN_AT.load(Ordering::SeqCst);
                         let elapsed = now_ms().saturating_sub(shown_at);
@@ -389,7 +577,13 @@ pub fn run() {
             set_pinned,
             get_pinned,
             set_interacting,
-            is_pointer_held
+            is_pointer_held,
+            preview_show,
+            preview_update,
+            preview_hide,
+            preview_position,
+            preview_set_size,
+            preview_set_interactive
         ]);
 
     app_log("Entering event loop...");

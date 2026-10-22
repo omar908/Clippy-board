@@ -1,26 +1,19 @@
-// Full-content preview panel.
+// Full-content preview — separate window.
 //
 // Shows the complete text / image / file list for the currently selected
-// item — a pure view of the one selection state that both the mouse (hover)
-// and the keyboard (arrows) move. The main window widens to the right while
-// the panel is open, and the original geometry is restored when it closes.
-//
-// The module is split so the presentation can be swapped later without
-// touching the experience-defining parts:
-//   1. renderPreviewContent() — pure DOM renderer (item -> panel content)
-//   2. trigger/lifetime below  — selection-following + grace delay
-//   3. geometry adapter        — expand/restore the main window (see bottom)
+// item in a dedicated window that positions itself beside the main window.
+// The main window never resizes; the preview window appears/disappears.
 
-import { getCurrentWindow, currentMonitor, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emitTo } from "@tauri-apps/api/event";
 import type { ClipboardItem } from "./types";
 
-const PANEL_W = 480;        // logical px added to the window width
-const MIN_WIN_W = 360;      // width restores floor — mirrors min_inner_size in src-tauri/src/lib.rs
-const GRACE_MS = 350;       // close shortly after the cursor leaves the window
-const HOLD_QUIET_MS = 150;  // grace stays held this long after the last drag/resize event
-const RELEASE_POLL_MS = 150; // re-check the mouse button this often while it is held
+const PREVIEW_W = 480;         // logical px — preview window width
+const PREVIEW_GAP = 8;         // logical px — gap between main and preview
+const GRACE_MS = 350;          // close shortly after the cursor leaves the window
+const HOLD_QUIET_MS = 150;     // grace stays held this long after the last drag/resize event
+const RELEASE_POLL_MS = 150;   // re-check the mouse button this often while it is held
 const RELEASE_MAX_MS = 30_000; // safety cap: a stuck check can't hold the panel forever
 const TEXT_CHAR_CAP = 100_000; // render at most this much text (full fidelity beyond is noise anyway)
 
@@ -30,8 +23,6 @@ interface PreviewHost {
 }
 
 let host: PreviewHost | null = null;
-let popupEl: HTMLElement;
-let panelEl: HTMLElement;
 let headerEl: HTMLElement;
 let bodyEl: HTMLElement;
 
@@ -41,6 +32,13 @@ let graceTimer: number | null = null;
 let holdUntil = 0;            // epoch ms — no grace dismissal before this (resize stream)
 let holdCheckTimer: number | null = null;
 let nativeDragActive = false; // JS-initiated native drag/resize loop in progress
+let mainMoveHandler: (() => void) | null = null;
+let mainResizeHandler: (() => void) | null = null;
+let isPreviewWindow = false;    // true in the separate preview window's module instance
+let unlistenMove: (() => void) | null = null;
+let unlistenResize: (() => void) | null = null;
+let repositionQueued = false;   // coalesces a burst of move/resize events into one
+let repositionRunning = false;  // guards against overlapping async reposition runs
 
 // ---------------------------------------------------------------------------
 // Content renderer (shape-agnostic: works in any container element)
@@ -184,35 +182,38 @@ function update(shouldOpen: boolean): void {
   const item = sourceItem();
   if (!item) { previewDismiss(); return; }
   if (!open) {
-    if (shouldOpen) openPanel(item);
+    if (shouldOpen) void openPanel(item);
     return;
   }
-  if (renderedId !== item.id) renderPreviewContent(headerEl, bodyEl, item);
-  renderedId = item.id;
+  if (renderedId !== item.id) {
+    renderedId = item.id;
+    // The preview is a separate window: push the new content through Rust so
+    // the pre-rendered item reaches the preview window's DOM.
+    void invoke("preview_update", { item }).catch(() => {});
+  }
 }
 
-function openPanel(item: ClipboardItem): void {
-  renderPreviewContent(headerEl, bodyEl, item);
+async function openPanel(item: ClipboardItem): Promise<void> {
   renderedId = item.id;
   open = true;
-  panelEl.classList.add("open");
-  panelEl.setAttribute("aria-hidden", "false");
-  void expandGeometry();
+  startTracking();
+  // Rust shows the window and delivers the item in one call (reliable path).
+  await showPreview(item);
 }
 
-/** Close the panel and restore the window geometry. Idempotent. */
+/** Close the preview window. Idempotent. */
 export function previewDismiss(): void {
   if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
   const wasOpen = open;
   open = false;
   renderedId = null;
   if (wasOpen) {
-    panelEl.classList.remove("open");
-    panelEl.classList.remove("panel-left");
-    panelEl.setAttribute("aria-hidden", "true");
     bodyEl.replaceChildren(); // drop the full-size image for GC
+    void invoke("preview_hide").catch(() => {});
+    stopTracking();
+    // Tell the preview window to reset its mirrored state.
+    void emitTo("preview", "preview-hidden", {}).catch(() => {});
   }
-  void restoreGeometry();
 }
 
 function startGrace(): void {
@@ -257,19 +258,31 @@ async function graceFire(): Promise<void> {
   }
   // State can change while the invoke was in flight.
   if (nativeDragActive || Date.now() < holdUntil) return;
+  // In the preview window, ask main to close us: main owns the open/close
+  // state (it knows whether the cursor is still over the list), so a
+  // self-dismiss here would desync the two windows.
+  if (isPreviewWindow) {
+    void emitTo("main", "preview-request-close", {}).catch(() => {});
+    return;
+  }
   previewDismiss();
 }
 
 /** Refresh the hold used while the OS sizing loop streams resize events
  *  (native edge resize — no JS hook there). Once events go quiet, re-check
- *  the real cursor position before letting the grace run again. */
+ *  whether the pointer is still over THIS window before letting the grace run. */
 function refreshHold(): void {
   holdUntil = Date.now() + HOLD_QUIET_MS;
   if (holdCheckTimer !== null) clearTimeout(holdCheckTimer);
   holdCheckTimer = window.setTimeout(() => {
     holdCheckTimer = null;
     holdUntil = 0;
-    if (popupEl && !popupEl.matches(":hover")) startGrace();
+    // Only arm the grace close if the pointer is not over this window. In the
+    // main window that means "over the list/panel area"; in the preview window
+    // it means "over the preview panel".
+    const surface = document.querySelector(".clippy-popup") as HTMLElement | null;
+    if (surface && surface.matches(":hover")) return;
+    startGrace();
   }, HOLD_QUIET_MS + 10);
 }
 
@@ -303,163 +316,187 @@ export function previewRefresh(): void {
 }
 
 export function initPreview(hostApi: PreviewHost): void {
+  const label = getCurrentWindow().label;
+
+  if (label === "preview") {
+    initPreviewWindow();
+    return;
+  }
+
+  // ---- Main window ----
   host = hostApi;
-  popupEl = document.querySelector(".clippy-popup")!;
-  panelEl = document.getElementById("preview-panel")!;
   headerEl = document.getElementById("preview-header")!;
   bodyEl = document.getElementById("preview-body")!;
 
-  // The panel opens from card hover or arrow keys only — hovering window
-  // chrome (header, footer, search) must not open it. Leaving the window
-  // closes it after a short grace period.
-  popupEl.addEventListener("mouseleave", () => {
-    startGrace();
-  });
+  // Leaving the main window arms the grace close; entering cancels it. Moving
+  // the cursor across to the preview window recomposes inside the grace window
+  // (the preview's own mouseenter cancels the close).
+  const surface = document.querySelector(".clippy-popup") as HTMLElement | null;
+  if (surface) {
+    surface.addEventListener("mouseenter", cancelGrace);
+    surface.addEventListener("mouseleave", () => { if (open) startGrace(); });
+  }
 
-  // Rust hides the window on focus loss / Esc / copy (ADR-0002), and the
-  // webview can't observe a native hide on its own (WebView2 keeps
-  // document.visibilityState "visible" for a hidden parent window), so every
-  // hide path emits `window-hidden` — the geometry is restored while the
-  // window is invisible, keeping position/size retention intact.
+  // The preview window's JS attaches its listeners asynchronously; when it is
+  // up it announces itself and we (re)send the current item. This "pull"
+  // handshake removes any race where an early emit would be dropped.
+  void listen("preview-ready", () => {
+    const item = sourceItem();
+    if (item && open) void emitTo("preview", "preview-content", item).catch(() => {});
+  }).catch(() => {});
+
+  // The preview window asks us to close when the cursor has left it. We are
+  // the sole owner of open/close: honour the request only if the cursor is not
+  // back over our own surface (e.g. the user moved from the preview back onto
+  // a list card).
+  void listen("preview-request-close", () => {
+    if (surface && surface.matches(":hover")) return;
+    previewDismiss();
+  }).catch(() => {});
+
+  // The cursor crossed into the preview window: cancel our grace close so the
+  // preview survives the trip across the gap between the two windows.
+  void listen("preview-cancel-close", () => cancelGrace()).catch(() => {});
+
+  // Rust hides the main window on focus loss / Esc / copy; the preview follows.
   void listen("window-hidden", () => previewDismiss()).catch(() => {});
 }
 
-// ---------------------------------------------------------------------------
-// Geometry adapter — widens the main window for the panel.
-// Swap this section (not the rest) if the preview moves to its own window.
-//
-// Every operation is RELATIVE and exactly ± the panel — nothing pre-expand
-// is cached for restore:
-//   - width: open = current + PANEL_W, close = current - PANEL_W (floored at
-//     the app min width). The panel is a fixed 480 px CSS column, so user
-//     resizes while open are list-column resizes and closing keeps exactly
-//     the list width the user created.
-//   - x:     a flip shifts left by PANEL_W; closing a flipped panel shifts
-//     right by PANEL_W from the current position, so the list keeps its
-//     screen position after any drag.
-// Restoring absolute pre-expand coordinates instead (gated on "hasn't
-// moved/resized since") skipped the compensation after any user change,
-// teleporting the list by a full panel width (user-reported 2026-10-18).
-// All ops run through one queue, so interleaved expand/restore pairs can
-// never apply deltas computed from stale state.
-// ---------------------------------------------------------------------------
+/** Preview-window side: render incoming content and announce readiness. */
+function initPreviewWindow(): void {
+  isPreviewWindow = true;
+  document.body.classList.add("preview-window");
+  headerEl = document.getElementById("preview-header")!;
+  bodyEl = document.getElementById("preview-body")!;
 
-let geo: "normal" | "expanded" = "normal";
-let flippedLeft = false;
-let pendingRestore: { flipped: boolean } | null = null; // applied after leaving maximize
-let geoQueue: Promise<void> = Promise.resolve();
-
-function queueGeoOp(op: () => Promise<void>): Promise<void> {
-  geoQueue = geoQueue.then(op).catch((e) => console.error("preview geometry failed:", e));
-  return geoQueue;
-}
-
-function panelPx(scale: number): number {
-  return Math.round(PANEL_W * scale);
-}
-
-function expandGeometry(): Promise<void> {
-  return queueGeoOp(async () => {
-    if (geo !== "normal") return;
-    const win = getCurrentWindow();
-    try {
-      if (await win.isMaximized()) return; // already wide enough; nothing to restore later
-
-      const scale = await win.scaleFactor();
-      const inner = await win.innerSize();       // physical
-      const outer = await win.outerPosition();   // physical
-      const outerSz = await win.outerSize();     // physical
-      const innerLogical = inner.toLogical(scale);
-
-      // Widening grows the window to the right; if that would cross the work
-      // area's right edge, the panel flips to the LEFT side instead: the window
-      // grows leftward by exactly the panel width so the list column keeps its
-      // exact screen position (like a menu opening leftward near an edge).
-      flippedLeft = false;
-      let newX = outer.x;
-      const mon = await currentMonitor();
-      if (mon) {
-        const px = panelPx(scale);
-        const waRight = mon.workArea.position.x + mon.workArea.size.width;
-        if (outer.x + outerSz.width + px > waRight) {
-          newX = Math.max(mon.workArea.position.x, outer.x - px);
-          flippedLeft = newX < outer.x;
-        }
-      }
-
-      await win.setSize(new LogicalSize(innerLogical.width + PANEL_W, innerLogical.height));
-      if (flippedLeft) await win.setPosition(new PhysicalPosition(newX, outer.y));
-      panelEl.classList.toggle("panel-left", flippedLeft);
-      geo = "expanded";
-    } catch (e) {
-      console.error("preview expand failed:", e);
+  void listen("preview-content", (event: { payload: ClipboardItem }) => {
+    if (event.payload) {
+      renderPreviewContent(headerEl, bodyEl, event.payload);
+      renderedId = event.payload.id;
+      open = true;
     }
+  }).catch(() => {});
+
+  // Main owns the open/close state; when it hides the preview, reset ours so a
+  // later re-show starts clean.
+  void listen("preview-hidden", () => {
+    open = false;
+    renderedId = null;
+    bodyEl.replaceChildren();
+  }).catch(() => {});
+
+  // Announce readiness so the main window can (re)send the selected item.
+  void emitTo("main", "preview-ready", {}).catch(() => {});
+
+  // Moving the pointer inside the preview makes it focusable so the user can
+  // select and copy text; moving out returns focus to the main window so
+  // keyboard traversal keeps working. Leaving also (after the grace period)
+  // asks the main window to close the preview — main is the sole owner of the
+  // open/close state, which keeps the two windows from desyncing.
+  const panelEl = document.getElementById("preview-panel");
+  if (panelEl) {
+    panelEl.addEventListener("mouseenter", () => {
+      cancelGrace();
+      // Tell main to cancel its own grace too: the cursor left main's area to
+      // get here, which armed main's grace, and nothing else would clear it.
+      void emitTo("main", "preview-cancel-close", {}).catch(() => {});
+      void invoke("preview_set_interactive", { interactive: true }).catch(() => {});
+    });
+    panelEl.addEventListener("mouseleave", () => {
+      void invoke("preview_set_interactive", { interactive: false }).catch(() => {});
+      if (open) startGrace();
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Geometry — the preview window is a separate always-on-top window aligned to
+// the right (or, near a screen edge, the left) of the main window. It tracks
+// the main window's move/resize. The main window itself never changes size.
+// ---------------------------------------------------------------------------
+
+/** Physical rectangle of the main window plus the placement for the preview. */
+async function computePreviewPlacement(win: ReturnType<typeof getCurrentWindow>) {
+  const scale = await win.scaleFactor();
+  const pos = await win.outerPosition();     // physical
+  const size = await win.outerSize();        // physical
+  const mon = await currentMonitor();
+
+  const gap = Math.round(PREVIEW_GAP * scale);
+  const previewW = Math.round(PREVIEW_W * scale);
+  const previewH = size.height;
+
+  // Prefer the right side; flip to the left when it would overflow the work
+  // area (so the list column keeps its exact screen position).
+  let x = pos.x + size.width + gap;
+  const y = pos.y;
+  if (mon) {
+    const waLeft = mon.workArea.position.x;
+    const waRight = waLeft + mon.workArea.size.width;
+    if (x + previewW > waRight) {
+      x = Math.max(waLeft, pos.x - previewW - gap);
+    }
+  }
+  return { x, y, width: previewW, height: previewH };
+}
+
+/**
+ * Coalesce a burst of move/resize events into a single reposition. During a
+ * native window drag the OS streams these events at high frequency; running
+ * the async placement (several IPCs) per event makes the drag crawl. One
+ * in-flight run plus rAF coalescing keeps the preview glued without the lag.
+ */
+function scheduleReposition(): void {
+  if (!open || repositionQueued || repositionRunning) return;
+  repositionQueued = true;
+  requestAnimationFrame(() => {
+    repositionQueued = false;
+    if (!open || repositionRunning) return;
+    repositionRunning = true;
+    void positionPreview().finally(() => { repositionRunning = false; });
   });
 }
 
-function restoreGeometry(): Promise<void> {
-  return queueGeoOp(async () => {
-    if (geo !== "expanded") return;
-    geo = "normal";
-    const win = getCurrentWindow();
-    try {
-      const scale = await win.scaleFactor();
-      const inner = await win.innerSize();
-      const innerLogical = inner.toLogical(scale);
-
-      if (await win.isMaximized()) {
-        pendingRestore = { flipped: flippedLeft };
-        return;
-      }
-      // A flipped panel occupies the window's LEFT edge: closing it must
-      // shift the window right by exactly the panel width so the list keeps
-      // its screen position — from wherever the window is now, the user's
-      // own drags included. (An unflipped panel widens rightward, so the
-      // shrink is invisible on screen and no shift is needed.)
-      if (flippedLeft) {
-        const pos = await win.outerPosition();
-        await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
-      }
-      // Closing removes exactly the panel column: subtract its width from
-      // wherever the window is now. The panel is a fixed 480 px CSS column,
-      // so any resize while open was a list-column resize — this keeps the
-      // list width the user created instead of a pre-expand cache (whose
-      // mismatch check skipped restoration entirely after any user resize).
-      const targetW = Math.max(MIN_WIN_W, innerLogical.width - PANEL_W);
-      await win.setSize(new LogicalSize(targetW, innerLogical.height));
-    } catch (e) {
-      console.error("preview restore failed:", e);
-    }
-  });
+/** Position the preview window beside the main window (physical coords). */
+async function positionPreview(): Promise<void> {
+  if (!open) return;
+  try {
+    const p = await computePreviewPlacement(getCurrentWindow());
+    await invoke("preview_position", { x: p.x, y: p.y });
+    await invoke("preview_set_size", { width: p.width, height: p.height });
+  } catch {
+    /* window may be mid-teardown; ignore */
+  }
 }
 
-/** Self-healing for maximize/unmaximize and user resizes around panel state.
- *  Every resize event also holds the grace close: the OS sizing loop takes
- *  the mouse from the webview, which sees a synthetic leave and would close
- *  the preview mid-drag (native edge resize has no JS hook to catch). */
+/** Show the preview window with the given item. */
+async function showPreview(item: ClipboardItem): Promise<void> {
+  const p = await computePreviewPlacement(getCurrentWindow());
+  await invoke("preview_show", { x: p.x, y: p.y, width: p.width, height: p.height, item });
+}
+
+/** Start tracking the main window's geometry (idempotent). */
+function startTracking(): void {
+  if (mainMoveHandler || mainResizeHandler) return;
+  const win = getCurrentWindow();
+  mainMoveHandler = () => { scheduleReposition(); };
+  mainResizeHandler = () => { refreshHold(); scheduleReposition(); };
+  win.onMoved(mainMoveHandler).then((un) => { unlistenMove = un; }).catch(() => {});
+  win.onResized(mainResizeHandler).then((un) => { unlistenResize = un; }).catch(() => {});
+}
+
+/** Stop tracking main-window geometry and detach the listeners. */
+function stopTracking(): void {
+  mainMoveHandler = null;
+  mainResizeHandler = null;
+  if (unlistenMove) { unlistenMove(); unlistenMove = null; }
+  if (unlistenResize) { unlistenResize(); unlistenResize = null; }
+  repositionQueued = false;
+}
+
+/** Called from the main window on every resize: hold the grace close during
+ *  the OS sizing loop and keep the preview aligned. */
 export function previewHandleResize(): void {
   refreshHold();
-  void queueGeoOp(async () => {
-    const win = getCurrentWindow();
-    try {
-      if (await win.isMaximized()) return;
-      if (pendingRestore !== null) {
-        const scale = await win.scaleFactor();
-        const inner = await win.innerSize();
-        const innerLogical = inner.toLogical(scale);
-        if (pendingRestore.flipped) {
-          const pos = await win.outerPosition();
-          await win.setPosition(new PhysicalPosition(pos.x + panelPx(scale), pos.y));
-        }
-        await win.setSize(new LogicalSize(Math.max(MIN_WIN_W, innerLogical.width - PANEL_W), innerLogical.height));
-        pendingRestore = null;
-      } else if (open && geo === "normal") {
-        void expandGeometry(); // queued — runs after this self-heal
-      } else if (!open && geo === "expanded") {
-        void restoreGeometry();
-      }
-    } catch (e) {
-      console.error("preview resize self-heal failed:", e);
-    }
-  });
+  scheduleReposition();
 }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem } from "./types";
 import {
@@ -18,6 +18,7 @@ let selectedIndex = 0;
 let currentFilter: "all" | "text" | "image" | "file" = "all";
 let searchQuery = "";
 let isPinned = false;
+const isPreviewWindow = getCurrentWindow().label === "preview";
 
 // DOM Elements
 const searchInput = document.getElementById("search-input") as HTMLInputElement;
@@ -321,30 +322,24 @@ window.addEventListener("mousemove", (e) => {
   }
 });
 
-// Keyboard Navigation
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    // Hide first, then restore the pre-preview geometry while invisible.
-    invoke("hide_window").then(() => previewDismiss()).catch(() => {});
-  } else if (e.key === "ArrowDown") {
-    e.preventDefault();
+/** Apply an arrow/enter key to the list selection. Shared by the main
+ *  window's own key handling and by keys forwarded from the preview window. */
+function handleListKey(key: string): void {
+  if (key === "ArrowDown") {
     if (filteredHistory.length > 0) {
       takeOverForKeyboard();
       selectedIndex = Math.min(selectedIndex + 1, filteredHistory.length - 1);
       renderList();
       previewSelectionChanged();
     }
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
+  } else if (key === "ArrowUp") {
     if (filteredHistory.length > 0) {
       takeOverForKeyboard();
       selectedIndex = Math.max(selectedIndex - 1, 0);
       renderList();
       previewSelectionChanged();
     }
-  } else if (e.key === "Enter") {
-    e.preventDefault();
+  } else if (key === "Enter") {
     // One flow: Enter always copies the highlighted item — whichever input
     // (hover or arrows) last moved the highlight.
     const target = filteredHistory[selectedIndex];
@@ -352,7 +347,44 @@ window.addEventListener("keydown", (e) => {
       selectItem(target.id);
     }
   }
+}
+
+// Keyboard Navigation
+window.addEventListener("keydown", (e) => {
+  // In the preview window the keys belong to the main window's list: forward
+  // them so arrow traversal keeps working while the pointer is in the preview
+  // (the preview has focus so the user can select text).
+  if (isPreviewWindow) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+      e.preventDefault();
+      void emitTo("main", "preview-forward-key", { key: e.key }).catch(() => {});
+    } else if (e.key === "Escape") {
+      // Escape closes the app from the preview window too.
+      e.preventDefault();
+      void emitTo("main", "preview-forward-key", { key: "Escape" }).catch(() => {});
+    }
+    return;
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    // Hide first, then restore the pre-preview geometry while invisible.
+    invoke("hide_window").then(() => previewDismiss()).catch(() => {});
+  } else if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter") {
+    e.preventDefault();
+    handleListKey(e.key);
+  }
 });
+
+// Keys pressed while the preview window has focus (the user is selecting text
+// there) still drive the main list.
+void listen<{ key: string }>("preview-forward-key", (event) => {
+  if (isPreviewWindow) return;
+  if (event.payload.key === "Escape") {
+    invoke("hide_window").then(() => previewDismiss()).catch(() => {});
+    return;
+  }
+  handleListKey(event.payload.key);
+}).catch(() => {});
 
 // Search input events
 searchInput.addEventListener("input", () => {
@@ -454,7 +486,9 @@ window.addEventListener("focus", () => {
 // Leaving the window (focus loss) also ends the keyboard takeover.
 window.addEventListener("blur", () => releaseKeyboard());
 
-// Keep the preview geometry consistent across maximize/unmaximize and user resizes
+// Keep the preview geometry consistent across maximize/unmaximize and user
+// resizes. This is separate from the preview module's own tracking: it also
+// holds the grace close open during the OS sizing loop.
 getCurrentWindow()
   .onResized(() => previewHandleResize())
   .catch(() => {});
@@ -475,9 +509,16 @@ async function setupListener() {
 
 // Initialization
 window.addEventListener("DOMContentLoaded", () => {
+  const label = getCurrentWindow().label;
+
+  // The preview window loads the same bundle but renders only the preview
+  // panel; initPreview() branches on the window label internally.
   initPreview({
     getSelected: () => filteredHistory[selectedIndex] ?? null,
   });
+
+  if (label === "preview") return;
+
   searchInput.focus();
   fetchInitialHistory();
   setupListener();

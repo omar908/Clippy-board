@@ -408,6 +408,30 @@ html, body {
   background: rgba(255, 255, 255, 0.22);
 }
 
+/* Preview window: body.preview-window shows only the preview panel,
+   filling the whole separate always-on-top window. */
+body.preview-window .clippy-popup {
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+body.preview-window .list-column {
+  display: none;
+}
+
+body.preview-window .resize-grip {
+  display: none;
+}
+
+body.preview-window .preview-panel {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100vw;
+  border-left: none;
+  border-right: none;
+}
+
 .history-list {
   display: flex;
   flex-direction: column;
