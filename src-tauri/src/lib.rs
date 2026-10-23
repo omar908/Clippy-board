@@ -107,7 +107,9 @@ fn hide_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn show_window(app: AppHandle) -> Result<(), String> {
-    toggle_window(&app);
+    // Idempotent: unlike the tray/hotkey toggle, callers (automation) can ask
+    // for a visible window without accidentally hiding an already-visible one.
+    show_main_window(&app);
     Ok(())
 }
 
@@ -325,6 +327,41 @@ fn defer_hide_until_mouse_up(app: AppHandle) {
     });
 }
 
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            return;
+        }
+        // Record when we showed so the Focused(false) handler doesn't immediately hide
+        WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
+        // Center only the first time; afterwards keep the user's position/size
+        if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
+            let _ = window.center();
+        }
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        app_log("main window shown");
+
+        #[cfg(target_os = "windows")]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+            };
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    ShowWindow(hwnd.0 as _, SW_RESTORE);
+                    ShowWindow(hwnd.0 as _, SW_SHOW);
+                    BringWindowToTop(hwnd.0 as _);
+                    SetForegroundWindow(hwnd.0 as _);
+                }
+            }
+        }
+    } else {
+        app_log("show_main_window: window 'main' not found!");
+    }
+}
+
 fn toggle_window(app: &AppHandle) {
     app_log("toggle_window called");
     if let Some(window) = app.get_webview_window("main") {
@@ -334,31 +371,7 @@ fn toggle_window(app: &AppHandle) {
             hide_main_window(app);
             app_log("toggle_window: window hidden");
         } else {
-            // Record when we showed so the Focused(false) handler doesn't immediately hide
-            WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
-            // Center only the first time; afterwards keep the user's position/size
-            if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
-                let _ = window.center();
-            }
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-            app_log("toggle_window: window shown");
-
-            #[cfg(target_os = "windows")]
-            {
-                use windows_sys::Win32::UI::WindowsAndMessaging::{
-                    BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
-                };
-                if let Ok(hwnd) = window.hwnd() {
-                    unsafe {
-                        ShowWindow(hwnd.0 as _, SW_RESTORE);
-                        ShowWindow(hwnd.0 as _, SW_SHOW);
-                        BringWindowToTop(hwnd.0 as _);
-                        SetForegroundWindow(hwnd.0 as _);
-                    }
-                }
-            }
+            show_main_window(app);
         }
     } else {
         app_log("toggle_window: window 'main' not found!");
@@ -367,6 +380,10 @@ fn toggle_window(app: &AppHandle) {
 
 pub(crate) fn app_log(msg: &str) {
     use std::io::Write;
+    // Debug builds also log to stderr so CI can see the startup sequence even
+    // when the developer-machine log path below is unavailable.
+    #[cfg(debug_assertions)]
+    eprintln!("[clippy] {}", msg);
     let path = "D:\\Documents\\Coding\\Rust\\clippy\\clippy.log";
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(f, "[LOG] {}", msg);
@@ -399,57 +416,11 @@ pub fn run() {
         .setup(move |app| {
             app_log("Setup hook entered");
 
-            // Create main window — start hidden (popup model: shown via shortcut/tray)
-            let _main_win = match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                .title(APP_NAME)
-                .inner_size(460.0, 580.0)
-                .min_inner_size(360.0, 420.0)
-                .resizable(true)
-                .decorations(false)
-                .shadow(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .visible(false)   // Start hidden — summoned via Ctrl+Shift+Space or tray
-                .center()
-                .build()
-            {
-                Ok(win) => {
-                    app_log(&format!("WebviewWindow built: label={}", win.label()));
-                    win
-                }
-                Err(e) => {
-                    app_log(&format!("WebviewWindow build FAILED: {}", e));
-                    return Err(e.into());
-                }
-            };
-
-            // Create preview window — separate always-on-top window. It is made
-            // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
-            // from the main window; arrow-key traversal keeps working.
-            let _preview_win = match tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
-                .title(format!("{APP_NAME} Preview"))
-                .inner_size(480.0, 580.0)
-                .resizable(false)
-                .decorations(false)
-                .shadow(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .focused(false)
-                .visible(false)   // Shown only while a selection preview is active
-                .build()
-            {
-                Ok(win) => {
-                    make_non_activating(&win);
-                    app_log(&format!("Preview window built: label={}", win.label()));
-                    win
-                }
-                Err(e) => {
-                    app_log(&format!("Preview window build FAILED: {}", e));
-                    return Err(e.into());
-                }
-            };
-
-            // Open persistent history storage (falls back to in-memory-only on failure)
+            // Load history BEFORE creating the webviews. Building a window can
+            // pump messages, letting the page invoke `get_history` while setup
+            // is still running; opening storage afterwards made startup racy
+            // (the page could render an empty list until the next clipboard
+            // event). With the state populated first, the first fetch is correct.
             match app.path().app_data_dir() {
                 Ok(dir) => {
                     let db_path = dir.join("history.db");
@@ -471,6 +442,73 @@ pub fn run() {
                 }
                 Err(e) => app_log(&format!("No app data dir, running in-memory only: {}", e)),
             }
+
+            // Test/automation hook: wry always supplies its own default
+            // AdditionalBrowserArguments, so relying on the WebView2 runtime
+            // env var alone is not portable. When a CDP port is requested,
+            // pass the args explicitly (keeping wry's defaults).
+            let cdp_browser_args = std::env::var("CLIPPY_CDP_PORT").ok().map(|port| {
+                format!(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                     --remote-debugging-port={port} --disable-gpu --no-sandbox"
+                )
+            });
+
+            // Create main window — start hidden (popup model: shown via shortcut/tray)
+            let mut main_builder =
+                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                    .title(APP_NAME)
+                    .inner_size(460.0, 580.0)
+                    .min_inner_size(360.0, 420.0)
+                    .resizable(true)
+                    .decorations(false)
+                    .shadow(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .visible(false)   // Start hidden — summoned via Ctrl+Shift+Space or tray
+                    .center();
+            if let Some(args) = &cdp_browser_args {
+                main_builder = main_builder.additional_browser_args(args);
+            }
+            let _main_win = match main_builder.build() {
+                Ok(win) => {
+                    app_log(&format!("WebviewWindow built: label={}", win.label()));
+                    win
+                }
+                Err(e) => {
+                    app_log(&format!("WebviewWindow build FAILED: {}", e));
+                    return Err(e.into());
+                }
+            };
+
+            // Create preview window — separate always-on-top window. It is made
+            // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
+            // from the main window; arrow-key traversal keeps working.
+            let mut preview_builder =
+                tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
+                    .title(format!("{APP_NAME} Preview"))
+                    .inner_size(480.0, 580.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .shadow(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .focused(false)
+                    .visible(false);   // Shown only while a selection preview is active
+            if let Some(args) = &cdp_browser_args {
+                preview_builder = preview_builder.additional_browser_args(args);
+            }
+            let _preview_win = match preview_builder.build() {
+                Ok(win) => {
+                    make_non_activating(&win);
+                    app_log(&format!("Preview window built: label={}", win.label()));
+                    win
+                }
+                Err(e) => {
+                    app_log(&format!("Preview window build FAILED: {}", e));
+                    return Err(e.into());
+                }
+            };
 
             // Start clipboard monitor
             let app_handle = app.handle().clone();
@@ -530,6 +568,16 @@ pub fn run() {
             }
 
             app_log(&format!("Setup complete — {APP_NAME} running in tray. Press Ctrl+Shift+Space to open."));
+
+            // Automation hook: on headless/CI sessions WebView2 may defer
+            // starting its browser process (and the CDP endpoint) until the
+            // window is visible. Never set in normal user runs.
+            if std::env::var_os("CLIPPY_SHOW_ON_START").is_some() {
+                app_log("CLIPPY_SHOW_ON_START set: showing main window");
+                IS_PINNED.store(true, Ordering::SeqCst);
+                show_main_window(app.handle());
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
