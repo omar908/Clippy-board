@@ -443,20 +443,34 @@ pub fn run() {
                 Err(e) => app_log(&format!("No app data dir, running in-memory only: {}", e)),
             }
 
+            // Test/automation hook: wry always supplies its own default
+            // AdditionalBrowserArguments, so relying on the WebView2 runtime
+            // env var alone is not portable. When a CDP port is requested,
+            // pass the args explicitly (keeping wry's defaults).
+            let cdp_browser_args = std::env::var("CLIPPY_CDP_PORT").ok().map(|port| {
+                format!(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+                     --remote-debugging-port={port} --disable-gpu --no-sandbox"
+                )
+            });
+
             // Create main window — start hidden (popup model: shown via shortcut/tray)
-            let _main_win = match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                .title(APP_NAME)
-                .inner_size(460.0, 580.0)
-                .min_inner_size(360.0, 420.0)
-                .resizable(true)
-                .decorations(false)
-                .shadow(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .visible(false)   // Start hidden — summoned via Ctrl+Shift+Space or tray
-                .center()
-                .build()
-            {
+            let mut main_builder =
+                tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
+                    .title(APP_NAME)
+                    .inner_size(460.0, 580.0)
+                    .min_inner_size(360.0, 420.0)
+                    .resizable(true)
+                    .decorations(false)
+                    .shadow(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .visible(false)   // Start hidden — summoned via Ctrl+Shift+Space or tray
+                    .center();
+            if let Some(args) = &cdp_browser_args {
+                main_builder = main_builder.additional_browser_args(args);
+            }
+            let _main_win = match main_builder.build() {
                 Ok(win) => {
                     app_log(&format!("WebviewWindow built: label={}", win.label()));
                     win
@@ -470,18 +484,21 @@ pub fn run() {
             // Create preview window — separate always-on-top window. It is made
             // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
             // from the main window; arrow-key traversal keeps working.
-            let _preview_win = match tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
-                .title(format!("{APP_NAME} Preview"))
-                .inner_size(480.0, 580.0)
-                .resizable(false)
-                .decorations(false)
-                .shadow(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .focused(false)
-                .visible(false)   // Shown only while a selection preview is active
-                .build()
-            {
+            let mut preview_builder =
+                tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
+                    .title(format!("{APP_NAME} Preview"))
+                    .inner_size(480.0, 580.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .shadow(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .focused(false)
+                    .visible(false);   // Shown only while a selection preview is active
+            if let Some(args) = &cdp_browser_args {
+                preview_builder = preview_builder.additional_browser_args(args);
+            }
+            let _preview_win = match preview_builder.build() {
                 Ok(win) => {
                     make_non_activating(&win);
                     app_log(&format!("Preview window built: label={}", win.label()));

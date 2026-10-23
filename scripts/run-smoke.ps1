@@ -65,6 +65,11 @@ if ($previousBrowserArgs) {
 }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $debugArgs
 
+# Passed explicitly through Tauri's builder (the env var above is only a
+# fallback; wry's own default args can override it on some runtimes).
+$previousCdpPort = $env:CLIPPY_CDP_PORT
+$env:CLIPPY_CDP_PORT = "$Port"
+
 # Show the window during setup so WebView2 starts its browser process (and the
 # CDP endpoint) even in a headless session.
 $previousShowOnStart = $env:CLIPPY_SHOW_ON_START
@@ -128,12 +133,22 @@ try {
     foreach ($w in $webviews) {
         Write-Host "  pid=$($w.Id) cpu=$($w.CPU) responding=$($w.Responding)"
     }
+    try {
+        $withDebug = @(
+            Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.CommandLine -like "*--remote-debugging-port=$Port*" }
+        )
+        Write-Host "msedgewebview2 processes carrying the remote-debugging arg: $($withDebug.Count)"
+    } catch {
+        Write-Host "Could not inspect webview2 command lines: $_"
+    }
     $smokeExit = 1
 } finally {
     if ($app -and -not $app.HasExited) {
         Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
     }
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousBrowserArgs
+    $env:CLIPPY_CDP_PORT = $previousCdpPort
     $env:CLIPPY_SHOW_ON_START = $previousShowOnStart
 }
 
