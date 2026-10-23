@@ -25,6 +25,12 @@ const searchInput = document.getElementById("search-input") as HTMLInputElement;
 const searchClearBtn = document.getElementById("search-clear-btn") as HTMLButtonElement;
 const historyList = document.getElementById("history-list") as HTMLDivElement;
 const emptyState = document.getElementById("empty-state") as HTMLDivElement;
+const emptyTitle = emptyState.querySelector(".empty-title") as HTMLElement;
+const emptyDesc = emptyState.querySelector(".empty-desc") as HTMLElement;
+// The default copy lives in index.html; capture it once so a search can be
+// cleared without duplicating the markup in TypeScript.
+const emptyTitleDefault = emptyTitle.textContent ?? "";
+const emptyDescDefault = emptyDesc.innerHTML;
 const filterTabs = document.querySelectorAll<HTMLButtonElement>(".filter-tab");
 const pinBtn = document.getElementById("pin-btn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
@@ -92,11 +98,11 @@ function renderList() {
     historyList.innerHTML = "";
     emptyState.style.display = "flex";
     if (searchQuery) {
-      emptyState.querySelector(".empty-title")!.textContent = "No matches found";
-      emptyState.querySelector(".empty-desc")!.textContent = `No items found matching "${searchQuery}"`;
+      emptyTitle.textContent = "No matches found";
+      emptyDesc.textContent = `No items found matching "${searchQuery}"`;
     } else {
-      emptyState.querySelector(".empty-title")!.textContent = "Clipboard History is Empty";
-      emptyState.querySelector(".empty-desc")!.innerHTML = "Copy text, images, or files anywhere in Windows.<br/>Clippy will automatically capture them!";
+      emptyTitle.textContent = emptyTitleDefault;
+      emptyDesc.innerHTML = emptyDescDefault;
     }
     return;
   }

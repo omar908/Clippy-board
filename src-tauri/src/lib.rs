@@ -7,6 +7,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use clipboard::{ClipboardItem, ClipboardState};
 
+/// User-facing product name. Window titles, the tray menu/tooltip, and logs all
+/// derive from this so a rename never leaves one surface behind.
+const APP_NAME: &str = "Clippy-board";
+
 static IS_PINNED: AtomicBool = AtomicBool::new(false);
 /// Timestamp (millis since epoch) when Clippy window was last shown.
 /// Used to prevent the Focused(false) handler from immediately re-hiding the window.
@@ -371,7 +375,7 @@ pub(crate) fn app_log(msg: &str) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    app_log("Clippy starting up...");
+    app_log(&format!("{APP_NAME} starting up..."));
     let state = ClipboardState::new();
     let history_arc = Arc::clone(&state.history);
     let db_arc = Arc::clone(&state.db);
@@ -397,7 +401,7 @@ pub fn run() {
 
             // Create main window — start hidden (popup model: shown via shortcut/tray)
             let _main_win = match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
-                .title("Clippy")
+                .title(APP_NAME)
                 .inner_size(460.0, 580.0)
                 .min_inner_size(360.0, 420.0)
                 .resizable(true)
@@ -423,7 +427,7 @@ pub fn run() {
             // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
             // from the main window; arrow-key traversal keeps working.
             let _preview_win = match tauri::WebviewWindowBuilder::new(app, "preview", tauri::WebviewUrl::default())
-                .title("Clippy Preview")
+                .title(format!("{APP_NAME} Preview"))
                 .inner_size(480.0, 580.0)
                 .resizable(false)
                 .decorations(false)
@@ -483,16 +487,18 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
+            let show_label = format!("Show / Hide {APP_NAME}");
+            let quit_label = format!("Quit {APP_NAME}");
             match (
-                MenuItem::with_id(app, "show", "Show / Hide Clippy", true, None::<&str>),
-                MenuItem::with_id(app, "quit", "Quit Clippy", true, None::<&str>),
+                MenuItem::with_id(app, "show", show_label, true, None::<&str>),
+                MenuItem::with_id(app, "quit", quit_label, true, None::<&str>),
             ) {
                 (Ok(show_i), Ok(quit_i)) => {
                     if let Ok(menu) = Menu::with_items(app, &[&show_i, &quit_i]) {
                         if let Some(icon) = app.default_window_icon() {
                             match TrayIconBuilder::new()
                                 .icon(icon.clone())
-                                .tooltip("Clippy — Clipboard Manager")
+                                .tooltip(format!("{APP_NAME} — Clipboard Manager"))
                                 .menu(&menu)
                                 .show_menu_on_left_click(false)
                                 .on_menu_event(|app, event| match event.id().as_ref() {
@@ -523,7 +529,7 @@ pub fn run() {
                 _ => app_log("Failed to create tray menu items"),
             }
 
-            app_log("Setup complete — Clippy running in tray. Press Ctrl+Shift+Space to open.");
+            app_log(&format!("Setup complete — {APP_NAME} running in tray. Press Ctrl+Shift+Space to open."));
             Ok(())
         })
         .on_window_event(|window, event| {

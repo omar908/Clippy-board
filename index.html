@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Clippy</title>
+    <title>Clippy-board</title>
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
@@ -54,8 +54,8 @@
           <div class="empty-state" id="empty-state">
             <div class="empty-icon">📋</div>
             <div class="empty-title">Clipboard History is Empty</div>
-            <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy will automatically capture them!</div>
-            <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy</div>
+            <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy-board will automatically capture them!</div>
+            <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy-board</div>
           </div>
 
           <div class="history-list" id="history-list"></div>
@@ -77,7 +77,7 @@
         <div id="resize-grip" class="resize-grip" title="Resize"></div>
       </div>
 
-      <!-- Full-content preview (window widens while open) -->
+      <!-- Full-content preview (separate window, or docked panel when there is no room) -->
       <aside class="preview-panel" id="preview-panel" aria-hidden="true">
         <div class="preview-header" id="preview-header"></div>
         <div class="preview-body" id="preview-body"></div>
