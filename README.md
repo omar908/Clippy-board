@@ -98,6 +98,27 @@ Manual regression checklist: **[docs/testing/manual-smoke-test.md](docs/testing/
 
 `npm test` runs the Vitest suite for the pure preview-placement rules (`src/placement.test.ts`).
 
+`cargo test --manifest-path src-tauri/Cargo.toml` runs the storage unit tests
+(dedup/newest-wins, trimming, ordering, corrupt-row handling).
+
+Automated UI smoke test (WebView2 CDP). Build a debug binary with embedded
+assets, then run it through the helper:
+
+```powershell
+npm run tauri build -- --debug --no-bundle
+powershell -ExecutionPolicy Bypass -File scripts\run-smoke.ps1 -Exe src-tauri\target\debug\clippy.exe
+```
+
+The helper starts a fresh instance with remote debugging enabled, shows the
+window, runs `scripts/smoke.mjs` (title/header/width token, history render,
+hover -> preview), and stops the app. Add `-Seed` only on a disposable
+machine: it replaces the history with four synthetic samples, and the smoke
+then hovers the known `smoke-text-long` card.
+
+CI (`.github/workflows/ci.yml`) runs all of the above on Windows for every push
+and pull request. Release bundles are built only for `v*` tags or a manual
+`workflow_dispatch`, so ordinary pushes do not produce release artifacts.
+
 To fill the clipboard with a varied sample set (text of every length, images from
 1×1 to a 3 MB PNG, file drops):
 

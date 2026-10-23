@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Reusable CDP smoke test for the Clippy-board app.
- * Connects to the WebView2 remote debugging port (default :9222), asserts
- * basic UI state, and exercises hover -> preview (windowed) and dock (maximized/restored).
+ * CDP smoke test for the Clippy-board app.
+ *
+ * Connects to the WebView2 remote debugging port (default :9222), asserts the
+ * basic UI state, then exercises hover -> preview content.
+ *
+ * The app must be launched by scripts/run-smoke.ps1 (or manually against a
+ * fresh instance) with:
+ *   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222
  *
  * Usage:
  *   node scripts/smoke.mjs [--port 9222] [--url http://127.0.0.1:9222/json]
- * The app must be running with WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9222".
  */
 
 const args = process.argv.slice(2);
@@ -17,27 +21,22 @@ const get = (name, def) => {
 const port = get("--port", "9222");
 const jsonUrl = get("--url", `http://127.0.0.1:${port}/json`);
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function connect(t) {
-  const ws = new WebSocket(t.webSocketDebuggerUrl);
+async function connect(target) {
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     ws.onopen = resolve;
-    ws.onerror = (e) => reject(e);
+    ws.onerror = reject;
   });
   let id = 0;
   const pending = new Map();
-  const events = [];
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
     if (msg.id && pending.has(msg.id)) {
-      const p = pending.get(msg.id);
+      const resolve = pending.get(msg.id);
       pending.delete(msg.id);
-      p(msg);
-    } else {
-      events.push(msg);
+      resolve(msg);
     }
   };
   const send = (method, params = {}) =>
@@ -46,81 +45,196 @@ async function connect(t) {
       pending.set(myId, resolve);
       ws.send(JSON.stringify({ id: myId, method, params }));
     });
-  const evaluate = async (expression, awaitPromise = true) => {
-    const r = await send("Runtime.evaluate", { expression, returnByValue: true, awaitPromise });
+  const evaluate = async (expression) => {
+    const r = await send("Runtime.evaluate", {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    });
     if (r.result?.exceptionDetails) {
-      throw new Error("Eval exception: " + JSON.stringify(r.result.exceptionDetails));
+      throw new Error(
+        "Eval exception: " + JSON.stringify(r.result.exceptionDetails),
+      );
     }
     return r.result?.result?.value;
   };
-  return { ws, send, evaluate, events };
+  return { ws, send, evaluate };
 }
 
-async function getTargets() {
-  const res = await fetch(jsonUrl);
-  if (!res.ok) throw new Error(`CDP ${res.status} from ${jsonUrl}`);
-  return res.json();
+/** Wait until both webviews exist and can report their role. */
+async function connectPages(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError;
+
+  while (Date.now() < deadline) {
+    let pages = [];
+    try {
+      const res = await fetch(jsonUrl);
+      if (!res.ok) throw new Error(`CDP ${res.status} from ${jsonUrl}`);
+      const targets = (await res.json()).filter((t) => t.type === "page");
+      for (const target of targets) {
+        let conn;
+        try {
+          conn = await connect(target);
+          const isPreview = await conn.evaluate(
+            "!!document.body && document.body.classList.contains('preview-window')",
+          );
+          pages.push({ target, conn, isPreview });
+        } catch (e) {
+          conn?.ws.close();
+        }
+      }
+      const main = pages.find((p) => !p.isPreview);
+      const preview = pages.find((p) => p.isPreview);
+      if (main && preview) return { pages, main, preview };
+      lastError = new Error(
+        `found ${pages.length} page(s), need one main and one preview`,
+      );
+      for (const p of pages) p.conn.ws.close();
+    } catch (e) {
+      lastError = e;
+      for (const p of pages) p.conn.ws.close();
+    }
+    await sleep(500);
+  }
+
+  throw new Error(
+    `Timed out waiting for main + preview CDP targets${
+      lastError ? `: ${lastError.message}` : ""
+    }`,
+  );
+}
+
+/** Invoke a Tauri command from the page. */
+function invoke(conn, command, payload = {}) {
+  return conn.evaluate(`(async () => {
+    const tauri = window.__TAURI_INTERNALS__ ?? window.__TAURI__?.core;
+    if (!tauri) throw new Error("Tauri IPC bridge not available");
+    return tauri.invoke(${JSON.stringify(command)}, ${JSON.stringify(payload)});
+  })()`);
 }
 
 async function main() {
-  const targets = await getTargets();
-  if (targets.length < 1) throw new Error("No CDP targets found");
-  const pages = [];
-  for (const t of targets) {
-    const c = await connect(t);
-    const isPreview = await c.evaluate("document.body.classList.contains('preview-window')");
-    pages.push({ t, c, isPreview });
-    console.log(`connected ${t.id.slice(0, 8)} preview=${isPreview} title=${t.title}`);
+  const { pages, main, preview } = await connectPages();
+  for (const p of pages) {
+    console.log(
+      `connected ${p.target.id.slice(0, 8)} preview=${p.isPreview} title=${p.target.title}`,
+    );
   }
-  const main = pages.find((p) => !p.isPreview);
-  const preview = pages.find((p) => p.isPreview);
-  if (!main || !preview) throw new Error("Need both main and preview windows");
-  await main.c.send("Runtime.enable");
-  await preview.c.send("Runtime.enable");
+  await main.conn.send("Runtime.enable");
+  await preview.conn.send("Runtime.enable");
+
+  // The app starts hidden in the tray. Pin it (so focus loss during the test
+  // cannot auto-hide it) and show it, exactly like the tray toggle would.
+  await invoke(main.conn, "set_pinned", { pinned: true });
+  await invoke(main.conn, "show_window");
+  await sleep(800);
+
+  // History loads asynchronously; wait for the first render.
+  let itemCount = 0;
+  for (let i = 0; i < 60; i++) {
+    itemCount = await main.conn.evaluate(
+      "document.querySelectorAll('.history-item').length",
+    );
+    if (itemCount > 0) break;
+    await sleep(250);
+  }
 
   const state = JSON.parse(
-    await main.c.evaluate(`JSON.stringify((()=>{
-      const items=[...document.querySelectorAll('.history-item')];
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const items = [...document.querySelectorAll('.history-item')];
       return {
         header: document.querySelector('.app-title')?.textContent,
         docTitle: document.title,
         itemCount: items.length,
         emptyDisplay: getComputedStyle(document.getElementById('empty-state')).display,
         searchValue: document.getElementById('search-input')?.value || '',
-        previewWidthToken: getComputedStyle(document.documentElement).getPropertyValue('--preview-width').trim(),
+        previewWidthToken: getComputedStyle(document.documentElement)
+          .getPropertyValue('--preview-width').trim(),
         hasPin: !!document.getElementById('pin-btn'),
-        hasClear: !!document.getElementById('clear-btn')
+        hasClear: !!document.getElementById('clear-btn'),
       };
-    })())`)
+    })())`),
   );
   console.log("main state:", JSON.stringify(state));
-  if (state.header !== "Clippy-board") throw new Error(`Expected header Clippy-board, got ${state.header}`);
-  if (state.previewWidthToken !== "480px") throw new Error(`Expected --preview-width 480px, got ${state.previewWidthToken}`);
+  if (state.header !== "Clippy-board") {
+    throw new Error(`Expected header Clippy-board, got ${state.header}`);
+  }
+  if (state.docTitle !== "Clippy-board") {
+    throw new Error(`Expected document title Clippy-board, got ${state.docTitle}`);
+  }
+  if (state.previewWidthToken !== "480px") {
+    throw new Error(
+      `Expected --preview-width 480px, got ${state.previewWidthToken}`,
+    );
+  }
   if (state.itemCount < 1) throw new Error("Expected at least one history item");
+  if (state.emptyDisplay !== "none") {
+    throw new Error(`Expected empty state hidden, got display=${state.emptyDisplay}`);
+  }
 
+  // Prefer the deterministic seeded card, fall back to the first one.
   const card = JSON.parse(
-    await main.c.evaluate(`JSON.stringify((()=>{
-      const el=document.querySelector('.history-item');
-      if(!el) return null;
-      const r=el.getBoundingClientRect();
-      return {x:r.x+r.width/2,y:r.y+r.height/2,text:el.innerText.slice(0,60)};
-    })())`)
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const el =
+        document.querySelector('.history-item[data-id="smoke-text-long"]') ||
+        document.querySelector('.history-item');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        id: el.dataset.id,
+        text: el.innerText.slice(0, 60),
+      };
+    })())`),
   );
   if (!card) throw new Error("No card found");
-  const move = async (x,y)=>{ await main.c.send("Input.dispatchMouseEvent",{type:"mouseMoved",x,y,button:"none",pointerType:"mouse"}); await sleep(150); };
-  await move(60,30); await move(card.x,card.y); await move(card.x+6,card.y+4);
+  console.log("hovering card:", JSON.stringify(card));
+
+  const move = async (x, y) => {
+    await main.conn.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x,
+      y,
+      button: "none",
+      pointerType: "mouse",
+    });
+    await sleep(150);
+  };
+  // The first synthetic move is swallowed by the resize/hover guard.
+  await move(60, 30);
+  await move(card.x, card.y);
+  await move(card.x + 6, card.y + 4);
+
   let pstate = null;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     await sleep(250);
-    pstate = JSON.parse(await preview.c.evaluate(`JSON.stringify({bodyText:document.getElementById('preview-body')?.innerText.slice(0,120),headerText:document.getElementById('preview-header')?.innerText.slice(0,80),textEls:document.querySelectorAll('.preview-text').length,imageEls:document.querySelectorAll('.preview-image').length})`));
-    if ((pstate.textEls + pstate.imageEls) > 0 || (pstate.bodyText && pstate.bodyText.trim()) || (pstate.headerText && pstate.headerText.trim())) break;
+    pstate = JSON.parse(
+      await preview.conn.evaluate(`JSON.stringify({
+        bodyText: document.getElementById('preview-body')?.innerText.slice(0, 120),
+        headerText: document.getElementById('preview-header')?.innerText.slice(0, 80),
+        textEls: document.querySelectorAll('.preview-text').length,
+        imageEls: document.querySelectorAll('.preview-image').length,
+      })`),
+    );
+    if (
+      pstate.textEls + pstate.imageEls > 0 ||
+      pstate.bodyText?.trim() ||
+      pstate.headerText?.trim()
+    ) {
+      break;
+    }
   }
   console.log("preview state:", JSON.stringify(pstate));
-  if ((pstate.textEls + pstate.imageEls) < 1 && !(pstate.bodyText && pstate.bodyText.trim()) && !(pstate.headerText && pstate.headerText.trim())) throw new Error("Preview did not render content");
-  console.log("SMOKE OK (hover)");
+  const rendered =
+    pstate.textEls + pstate.imageEls > 0 ||
+    !!pstate.bodyText?.trim() ||
+    !!pstate.headerText?.trim();
+  if (!rendered) throw new Error("Preview did not render content");
 
-  console.log("SMOKE OK (hover)");
-  for (const p of pages) p.c.ws.close();
+  console.log("SMOKE OK");
+  for (const p of pages) p.conn.ws.close();
   process.exit(0);
 }
 
