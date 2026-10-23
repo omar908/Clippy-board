@@ -96,6 +96,8 @@ Clippy starts **in the system tray** (no window visible on launch).
 
 Manual regression checklist: **[docs/testing/manual-smoke-test.md](docs/testing/manual-smoke-test.md)**.
 
+`npm test` runs the Vitest suite for the pure preview-placement rules (`src/placement.test.ts`).
+
 To fill the clipboard with a varied sample set (text of every length, images from
 1×1 to a 3 MB PNG, file drops):
 
@@ -144,8 +146,9 @@ at 100 items, so seeding can push out older entries.
 | `src-tauri/src/storage.rs` | SQLite history persistence (insert/load/delete/clear/trim) |
 | `src/main.ts` | Frontend logic: history rendering, search, keyboard nav, IPC |
 | `src/types.ts` | Shared payload types (frontend mirror of the Rust `ClipboardPayload`) |
-| `src/preview.ts` | Full-content preview: renderer, hover/keyboard triggers, window geometry |
-| `src/styles.css` | Dark popup UI styling |
+| `src/preview.ts` | Preview presentation: renderer, hover/keyboard triggers, focus, window vs docked mode |
+| `src/placement.ts` | Pure preview-placement rules (right → left → docked) |
+| `src/styles.css` | Popup UI styling and semantic theme tokens |
 | `index.html` | Window layout |
 | `src-tauri/tauri.conf.json` | Window config (borderless, always-on-top, skip-taskbar) |
 | `src-tauri/Cargo.toml` | Rust dependencies |
@@ -175,7 +178,7 @@ History persists in SQLite at `{app_data_dir}/history.db` (typically `C:\Users\<
 
 ## Full-Content Preview
 
-Because the list line shows only a snippet, Clippy opens a **preview panel** for the selected item — hovering a card and the arrow keys move the **same highlight** (one flow, two inputs), so the panel always shows exactly what `Enter` will copy. Hovering window chrome like the header doesn't open the panel; the first arrow press hands control to the keyboard (the cursor hides and the mouse is ignored until the pointer moves again, so a parked cursor can't trap keyboard navigation). Text renders complete and selectable (first 100k chars if longer), images fit the panel with click-to-zoom anchored on the click point (drag or middle-drag to pan at 100%), and file entries list every path in full. The panel closes ~0.35 s after the cursor leaves the window, or when the window hides (copy, `Esc`, blur) — geometry is restored while the window is invisible, so position/size retention is unaffected. See [ADR-0005](./docs/adr/0005-full-content-preview-via-window-widening.md).
+Because the list line shows only a snippet, Clippy-board opens a **separate always-on-top preview window** for the selected item — hovering a card and the arrow keys move the **same highlight** (one flow, two inputs), so the window always shows exactly what `Enter` will copy. It sits to the right of the main window, flips to the left near a screen edge, and **docks as a panel inside the main window** when neither side has room (maximized, or a window too wide for the work area). Hovering window chrome like the header doesn't open it; the first arrow press hands control to the keyboard (the cursor hides and the mouse is ignored until the pointer moves again, so a parked cursor can't trap keyboard navigation). Text renders complete and selectable (first 100k chars if longer), images fit the preview with click-to-zoom anchored on the click point (drag or middle-drag to pan at 100%), and file entries list every path in full. The preview closes ~0.35 s after the cursor leaves it, or when the main window hides (copy, `Esc`, blur) — geometry is restored while the window is invisible, so position/size retention is unaffected. See [ADR-0007](./docs/adr/0007-preview-separate-window-with-dock-fallback.md).
 
 ---
 
@@ -195,5 +198,6 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0002](./docs/adr/0002-popup-hide-on-blur-with-interaction-guard.md) | Popup hides on blur, with a native drag/resize interaction guard |
 | [0003](./docs/adr/0003-main-thread-only-window-property-getters.md) | Window property getters are main-thread-only |
 | [0004](./docs/adr/0004-persistent-history-sqlite.md) | Persistent history via SQLite, full image + display thumbnail |
-| [0005](./docs/adr/0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) |
+| [0005](./docs/adr/0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) — superseded by 0007 |
 | [0006](./docs/adr/0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize |
+| [0007](./docs/adr/0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate always-on-top window, docking when there is no room |
