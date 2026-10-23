@@ -399,6 +399,33 @@ pub fn run() {
         .setup(move |app| {
             app_log("Setup hook entered");
 
+            // Load history BEFORE creating the webviews. Building a window can
+            // pump messages, letting the page invoke `get_history` while setup
+            // is still running; opening storage afterwards made startup racy
+            // (the page could render an empty list until the next clipboard
+            // event). With the state populated first, the first fetch is correct.
+            match app.path().app_data_dir() {
+                Ok(dir) => {
+                    let db_path = dir.join("history.db");
+                    match storage::open(&db_path) {
+                        Ok(conn) => {
+                            let items = storage::load(&conn);
+                            app_log(&format!(
+                                "Storage opened: {} ({} items loaded)",
+                                db_path.display(),
+                                items.len()
+                            ));
+                            *history_arc.lock().unwrap() = items;
+                            *db_arc.lock().unwrap() = Some(conn);
+                        }
+                        Err(e) => {
+                            app_log(&format!("Storage open FAILED, running in-memory only: {}", e));
+                        }
+                    }
+                }
+                Err(e) => app_log(&format!("No app data dir, running in-memory only: {}", e)),
+            }
+
             // Create main window — start hidden (popup model: shown via shortcut/tray)
             let _main_win = match tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::default())
                 .title(APP_NAME)
@@ -448,29 +475,6 @@ pub fn run() {
                     return Err(e.into());
                 }
             };
-
-            // Open persistent history storage (falls back to in-memory-only on failure)
-            match app.path().app_data_dir() {
-                Ok(dir) => {
-                    let db_path = dir.join("history.db");
-                    match storage::open(&db_path) {
-                        Ok(conn) => {
-                            let items = storage::load(&conn);
-                            app_log(&format!(
-                                "Storage opened: {} ({} items loaded)",
-                                db_path.display(),
-                                items.len()
-                            ));
-                            *history_arc.lock().unwrap() = items;
-                            *db_arc.lock().unwrap() = Some(conn);
-                        }
-                        Err(e) => {
-                            app_log(&format!("Storage open FAILED, running in-memory only: {}", e));
-                        }
-                    }
-                }
-                Err(e) => app_log(&format!("No app data dir, running in-memory only: {}", e)),
-            }
 
             // Start clipboard monitor
             let app_handle = app.handle().clone();
