@@ -124,3 +124,144 @@ pub fn trim(conn: &Connection, keep: usize) -> Result<(), String> {
     .map_err(|e| format!("failed to trim history: {}", e))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clipboard::{ClipboardItem, ClipboardPayload};
+    use rusqlite::Connection;
+
+    fn test_conn() -> Connection {
+        let conn = Connection::open_in_memory().expect("open in memory");
+        conn.execute_batch(SCHEMA).expect("schema");
+        conn
+    }
+
+    fn text_item(id: &str, ts: u64, text: &str) -> ClipboardItem {
+        let preview = text.chars().take(80).collect::<String>();
+        ClipboardItem {
+            id: id.to_string(),
+            timestamp: ts,
+            payload: ClipboardPayload::Text {
+                text: text.to_string(),
+                preview,
+                char_count: text.len(),
+                line_count: text.lines().count().max(1),
+            },
+        }
+    }
+
+    #[test]
+    fn load_empty_returns_empty() {
+        let conn = test_conn();
+        assert!(load(&conn).is_empty());
+    }
+
+    #[test]
+    fn insert_and_load_roundtrip() {
+        let conn = test_conn();
+        let item = text_item("1", 1000, "hello");
+        insert(&conn, &item).unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "1");
+        assert_eq!(items[0].timestamp, 1000);
+        match &items[0].payload {
+            ClipboardPayload::Text { text, .. } => assert_eq!(text, "hello"),
+            _ => panic!("wrong payload"),
+        }
+    }
+
+    #[test]
+    fn load_deduplicates_payloads_newest_wins() {
+        let conn = test_conn();
+        // Insert older duplicate first, then newer duplicate with different id/timestamp.
+        let old = text_item("old", 1000, "dup");
+        let new = text_item("new", 2000, "dup");
+        insert(&conn, &old).unwrap();
+        insert(&conn, &new).unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "new");
+        assert_eq!(items[0].timestamp, 2000);
+    }
+
+    #[test]
+    fn reinsert_same_payload_moves_to_top_via_dedup() {
+        let conn = test_conn();
+        insert(&conn, &text_item("a", 1000, "same")).unwrap();
+        insert(&conn, &text_item("b", 2000, "other")).unwrap();
+        // Re-copy/move-to-top: insert new row with same payload but newer timestamp/new id
+        insert(&conn, &text_item("a2", 3000, "same")).unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, "a2");
+        assert_eq!(items[1].id, "b");
+    }
+
+    #[test]
+    fn delete_removes_item() {
+        let conn = test_conn();
+        insert(&conn, &text_item("1", 1000, "x")).unwrap();
+        insert(&conn, &text_item("2", 2000, "y")).unwrap();
+        delete(&conn, "1").unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "2");
+    }
+
+    #[test]
+    fn clear_empties() {
+        let conn = test_conn();
+        insert(&conn, &text_item("1", 1000, "x")).unwrap();
+        insert(&conn, &text_item("2", 2000, "y")).unwrap();
+        clear(&conn).unwrap();
+        assert!(load(&conn).is_empty());
+    }
+
+    #[test]
+    fn trim_keeps_newest_n() {
+        let conn = test_conn();
+        for i in 1..=5 {
+            insert(&conn, &text_item(&format!("i{i}"), i as u64, &format!("t{i}"))).unwrap();
+        }
+        trim(&conn, 2).unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].id, "i5");
+        assert_eq!(items[1].id, "i4");
+    }
+
+    #[test]
+    fn trim_zero_keeps_none() {
+        let conn = test_conn();
+        insert(&conn, &text_item("1", 1000, "x")).unwrap();
+        trim(&conn, 0).unwrap();
+        assert!(load(&conn).is_empty());
+    }
+
+    #[test]
+    fn corrupt_row_skipped() {
+        let conn = test_conn();
+        insert(&conn, &text_item("good", 2000, "ok")).unwrap();
+        conn.execute(
+            "INSERT INTO history (id, timestamp, payload) VALUES (?1, ?2, ?3)",
+            params!["bad", 1000i64, "{not json"],
+        )
+        .unwrap();
+        let items = load(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "good");
+    }
+
+    #[test]
+    fn load_ordered_newest_first() {
+        let conn = test_conn();
+        insert(&conn, &text_item("1", 1000, "a")).unwrap();
+        insert(&conn, &text_item("2", 3000, "b")).unwrap();
+        insert(&conn, &text_item("3", 2000, "c")).unwrap();
+        let items = load(&conn);
+        let ids: Vec<_> = items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["2", "3", "1"]);
+    }
+}
