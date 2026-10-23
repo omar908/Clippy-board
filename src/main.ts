@@ -147,8 +147,15 @@ function renderList() {
     // (click and Enter both copy — a per-card Copy button was redundant).
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "item-action-btn btn-delete";
-    deleteBtn.textContent = "✕";
     deleteBtn.title = "Delete from history";
+    deleteBtn.setAttribute("aria-label", "Delete from history");
+    deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M2.5 4.5h11" />
+      <path d="M6 4.5V3.25h4V4.5" />
+      <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
+      <path d="M6.6 7.25v4M9.4 7.25v4" />
+    </svg>`;
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
       deleteItem(item.id);
