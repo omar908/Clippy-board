@@ -1,9 +1,16 @@
 # ADR-0005. Full-content preview via main-window widening (aside panel)
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-0006](0006-preview-separate-window-with-dock-fallback.md)
 **Date:** 2026-10-18
 **Deciders:** Omar Estrada
 **Related:** `ASSESSMENT.md` §8 (Next Steps item 2); implemented in `src/preview.ts`, `src-tauri/src/lib.rs` (`hide_main_window`), `src-tauri/capabilities/default.json`
+
+> **Superseded 2026-10-22.** The widening presentation was replaced by a separate
+> always-on-top window, falling back to this ADR's aside panel only when the main
+> window leaves no room beside it (ADR-0006). The trigger/lifetime model (§2,
+> "one selection, two traversals"), the content rules (§4), and the
+> `hide_main_window` choke point (§3) all carried over unchanged; the geometry
+> adapter (§1) was the part ADR-0005 predicted would be swapped, and it was.
 
 ## Context
 
