@@ -151,6 +151,9 @@ async function main() {
         searchValue: document.getElementById('search-input')?.value || '',
         previewWidthToken: getComputedStyle(document.documentElement)
           .getPropertyValue('--preview-width').trim(),
+        dockOpen: document.getElementById('preview-panel')?.classList.contains('open') || false,
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
         hasPin: !!document.getElementById('pin-btn'),
         hasClear: !!document.getElementById('clear-btn'),
       };
@@ -208,6 +211,7 @@ async function main() {
   await move(card.x + 6, card.y + 4);
 
   let pstate = null;
+  let dockState = null;
   for (let i = 0; i < 40; i++) {
     await sleep(250);
     pstate = JSON.parse(
@@ -218,22 +222,45 @@ async function main() {
         imageEls: document.querySelectorAll('.preview-image').length,
       })`),
     );
-    if (
+    dockState = JSON.parse(
+      await main.conn.evaluate(`JSON.stringify({
+        open: document.getElementById('preview-panel')?.classList.contains('open') || false,
+        bodyText: document.getElementById('preview-body')?.innerText.slice(0, 120),
+        headerText: document.getElementById('preview-header')?.innerText.slice(0, 80),
+        textEls: document.querySelectorAll('#preview-panel .preview-text').length,
+        imageEls: document.querySelectorAll('#preview-panel .preview-image').length,
+      })`),
+    );
+    const windowed =
       pstate.textEls + pstate.imageEls > 0 ||
-      pstate.bodyText?.trim() ||
-      pstate.headerText?.trim()
-    ) {
-      break;
-    }
+      !!pstate.bodyText?.trim() ||
+      !!pstate.headerText?.trim();
+    const docked =
+      dockState.open &&
+      (dockState.textEls + dockState.imageEls > 0 ||
+        !!dockState.bodyText?.trim() ||
+        !!dockState.headerText?.trim());
+    if (windowed || docked) break;
   }
-  console.log("preview state:", JSON.stringify(pstate));
-  const rendered =
+  console.log("preview window state:", JSON.stringify(pstate));
+  console.log("main dock state:", JSON.stringify(dockState));
+
+  const windowed =
     pstate.textEls + pstate.imageEls > 0 ||
     !!pstate.bodyText?.trim() ||
     !!pstate.headerText?.trim();
-  if (!rendered) throw new Error("Preview did not render content");
+  const docked =
+    dockState.open &&
+    (dockState.textEls + dockState.imageEls > 0 ||
+      !!dockState.bodyText?.trim() ||
+      !!dockState.headerText?.trim());
+  if (!windowed && !docked) {
+    throw new Error(
+      "Preview did not render content in the separate window or the docked panel",
+    );
+  }
 
-  console.log("SMOKE OK");
+  console.log(docked ? "SMOKE OK (docked preview)" : "SMOKE OK (window preview)");
   for (const p of pages) p.conn.ws.close();
   process.exit(0);
 }
