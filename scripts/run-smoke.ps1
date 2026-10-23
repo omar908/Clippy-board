@@ -55,6 +55,11 @@ if ($Seed) {
 
 $previousBrowserArgs = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
 $debugArgs = "--remote-debugging-port=$Port"
+if ($env:CI) {
+    # Hosted runners have no real GPU/desktop session; software rendering
+    # avoids WebView2 hanging during compositor startup.
+    $debugArgs = "$debugArgs --disable-gpu"
+}
 if ($previousBrowserArgs) {
     $debugArgs = "$previousBrowserArgs $debugArgs"
 }
@@ -96,6 +101,14 @@ try {
     $smokeExit = $LASTEXITCODE
 } catch {
     Write-Host "Smoke run failed: $_" -ForegroundColor Red
+    if ($app -and -not $app.HasExited) {
+        try {
+            $p = Get-Process -Id $app.Id -ErrorAction Stop
+            Write-Host "App still running: PID=$($p.Id) CPU=$($p.CPU) Responding=$($p.Responding) Threads=$($p.Threads.Count)"
+        } catch {
+            # process disappeared between checks
+        }
+    }
     $smokeExit = 1
 } finally {
     if ($app -and -not $app.HasExited) {
