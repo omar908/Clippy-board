@@ -75,6 +75,18 @@ $env:CLIPPY_CDP_PORT = "$Port"
 $previousShowOnStart = $env:CLIPPY_SHOW_ON_START
 $env:CLIPPY_SHOW_ON_START = "1"
 
+# Park the real cursor in the corner. The window is shown at startup, and if
+# the physical pointer happens to sit over a card it would open a preview and
+# make the hover assertions look at stale content.
+$savedCursor = $null
+try {
+    Add-Type -AssemblyName System.Windows.Forms | Out-Null
+    $savedCursor = [System.Windows.Forms.Cursor]::Position
+    [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new(0, 0)
+} catch {
+    Write-Host "Could not park the OS cursor: $_"
+}
+
 $app = $null
 $smokeExit = 1
 
@@ -150,6 +162,13 @@ try {
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousBrowserArgs
     $env:CLIPPY_CDP_PORT = $previousCdpPort
     $env:CLIPPY_SHOW_ON_START = $previousShowOnStart
+    if ($null -ne $savedCursor) {
+        try {
+            [System.Windows.Forms.Cursor]::Position = $savedCursor
+        } catch {
+            # ignore cursor restore failures on headless sessions
+        }
+    }
 }
 
 if ($smokeExit -ne 0) {

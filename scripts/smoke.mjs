@@ -260,6 +260,17 @@ async function main() {
     );
   }
 
+  // When the deterministic fixture is present, make sure the synthetic hover
+  // actually drove the preview rather than leaving stale content behind.
+  if (card.id === "smoke-text-long") {
+    const body = docked ? dockState.bodyText : pstate.bodyText;
+    if (!body || !body.includes("Clippy-board smoke-test")) {
+      throw new Error(
+        `Preview shows content from a different item: ${JSON.stringify(body)}`,
+      );
+    }
+  }
+
   console.log(docked ? "SMOKE OK (docked preview)" : "SMOKE OK (window preview)");
   for (const p of pages) p.conn.ws.close();
   process.exit(0);
