@@ -79,16 +79,33 @@ Clippy starts **in the system tray** (no window visible on launch).
 | **Open Clippy** | Press `Ctrl + Shift + Space` from anywhere, or click the tray icon |
 | **Search** | Type immediately — search input has focus on open |
 | **Navigate** | `↑` / `↓` arrow keys, or hover an item — both move the **same highlight** (hovering selects). The first arrow press takes over from the mouse: the cursor hides until the pointer moves |
-| **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` — the window widens with the panel, flipping it to the left side near a screen edge; it closes shortly after the cursor leaves the window (or on copy/close) |
+| **Preview full content** | Hover an item, or move the highlight with `↑` / `↓` — a separate always-on-top window opens beside the main window, flipping to the left near a screen edge. When there is no room (maximized, or wider than the work area allows) the panel docks inside the main window instead. It closes shortly after the cursor leaves, or on copy/close |
 | **Zoom image preview** | Click the previewed image — toggles fit ↔ 100%, anchored on the point you clicked; drag (or middle-drag) to pan |
 | **Copy an item** | Press `Enter` — always copies the highlighted item, however it got highlighted — or click an item (click copies it directly); the copied entry jumps to the top of the list and the highlight follows it there |
 | **Close** | Press `Escape`, or click outside the window |
 | **Move window** | Drag anywhere in the header |
-| **Resize window** | Drag the bottom-right grip, or any window edge — with the preview open, only the list column changes width |
+| **Resize window** | Drag the bottom-right grip, or any window edge |
 | **Maximize** | Double-click the header |
 | **Pin window open** | Click the 📌 button (prevents auto-hide — on blur and after copying) |
 | **Clear history** | Click 🗑️ |
 | **Quit** | Right-click the tray icon → Quit Clippy |
+
+---
+
+## Testing
+
+Manual regression checklist: **[docs/testing/manual-smoke-test.md](docs/testing/manual-smoke-test.md)**.
+
+To fill the clipboard with a varied sample set (text of every length, images from
+1×1 to a 3 MB PNG, file drops):
+
+```powershell
+powershell -STA -ExecutionPolicy Bypass -File scripts\seed-clipboard.ps1
+```
+
+The app must be running so the samples are captured; the script takes ~30 s,
+overwrites the clipboard, and leaves `seeding complete` on top. History is capped
+at 100 items, so seeding can push out older entries.
 
 ---
 
