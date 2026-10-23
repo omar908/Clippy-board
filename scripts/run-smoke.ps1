@@ -58,18 +58,23 @@ $debugArgs = "--remote-debugging-port=$Port"
 if ($env:CI) {
     # Hosted runners have no real GPU/desktop session; software rendering
     # avoids WebView2 hanging during compositor startup.
-    $debugArgs = "$debugArgs --disable-gpu"
+    $debugArgs = "$debugArgs --disable-gpu --no-sandbox"
 }
 if ($previousBrowserArgs) {
     $debugArgs = "$previousBrowserArgs $debugArgs"
 }
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $debugArgs
 
+# Show the window during setup so WebView2 starts its browser process (and the
+# CDP endpoint) even in a headless session.
+$previousShowOnStart = $env:CLIPPY_SHOW_ON_START
+$env:CLIPPY_SHOW_ON_START = "1"
+
 $app = $null
 $smokeExit = 1
 
 try {
-    Write-Host "Starting $Exe (CDP port $Port)..."
+    Write-Host "Starting $Exe (CDP port $Port, browser args: $debugArgs)..."
     $app = Start-Process -FilePath $Exe -PassThru `
         -RedirectStandardOutput $stdoutLog `
         -RedirectStandardError $stderrLog
@@ -109,12 +114,27 @@ try {
             # process disappeared between checks
         }
     }
+    try {
+        $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+        Write-Host "Listeners on port ${Port}: $($listeners.Count)"
+        foreach ($l in $listeners) {
+            Write-Host "  $($l.LocalAddress):$($l.LocalPort) pid=$($l.OwningProcess)"
+        }
+    } catch {
+        Write-Host "Could not query listeners: $_"
+    }
+    $webviews = @(Get-Process msedgewebview2 -ErrorAction SilentlyContinue)
+    Write-Host "msedgewebview2 processes: $($webviews.Count)"
+    foreach ($w in $webviews) {
+        Write-Host "  pid=$($w.Id) cpu=$($w.CPU) responding=$($w.Responding)"
+    }
     $smokeExit = 1
 } finally {
     if ($app -and -not $app.HasExited) {
         Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
     }
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousBrowserArgs
+    $env:CLIPPY_SHOW_ON_START = $previousShowOnStart
 }
 
 if ($smokeExit -ne 0) {

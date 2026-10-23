@@ -107,7 +107,9 @@ fn hide_window(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn show_window(app: AppHandle) -> Result<(), String> {
-    toggle_window(&app);
+    // Idempotent: unlike the tray/hotkey toggle, callers (automation) can ask
+    // for a visible window without accidentally hiding an already-visible one.
+    show_main_window(&app);
     Ok(())
 }
 
@@ -325,6 +327,41 @@ fn defer_hide_until_mouse_up(app: AppHandle) {
     });
 }
 
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            return;
+        }
+        // Record when we showed so the Focused(false) handler doesn't immediately hide
+        WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
+        // Center only the first time; afterwards keep the user's position/size
+        if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
+            let _ = window.center();
+        }
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        app_log("main window shown");
+
+        #[cfg(target_os = "windows")]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+            };
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    ShowWindow(hwnd.0 as _, SW_RESTORE);
+                    ShowWindow(hwnd.0 as _, SW_SHOW);
+                    BringWindowToTop(hwnd.0 as _);
+                    SetForegroundWindow(hwnd.0 as _);
+                }
+            }
+        }
+    } else {
+        app_log("show_main_window: window 'main' not found!");
+    }
+}
+
 fn toggle_window(app: &AppHandle) {
     app_log("toggle_window called");
     if let Some(window) = app.get_webview_window("main") {
@@ -334,31 +371,7 @@ fn toggle_window(app: &AppHandle) {
             hide_main_window(app);
             app_log("toggle_window: window hidden");
         } else {
-            // Record when we showed so the Focused(false) handler doesn't immediately hide
-            WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
-            // Center only the first time; afterwards keep the user's position/size
-            if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
-                let _ = window.center();
-            }
-            let _ = window.show();
-            let _ = window.unminimize();
-            let _ = window.set_focus();
-            app_log("toggle_window: window shown");
-
-            #[cfg(target_os = "windows")]
-            {
-                use windows_sys::Win32::UI::WindowsAndMessaging::{
-                    BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
-                };
-                if let Ok(hwnd) = window.hwnd() {
-                    unsafe {
-                        ShowWindow(hwnd.0 as _, SW_RESTORE);
-                        ShowWindow(hwnd.0 as _, SW_SHOW);
-                        BringWindowToTop(hwnd.0 as _);
-                        SetForegroundWindow(hwnd.0 as _);
-                    }
-                }
-            }
+            show_main_window(app);
         }
     } else {
         app_log("toggle_window: window 'main' not found!");
@@ -538,6 +551,16 @@ pub fn run() {
             }
 
             app_log(&format!("Setup complete — {APP_NAME} running in tray. Press Ctrl+Shift+Space to open."));
+
+            // Automation hook: on headless/CI sessions WebView2 may defer
+            // starting its browser process (and the CDP endpoint) until the
+            // window is visible. Never set in normal user runs.
+            if std::env::var_os("CLIPPY_SHOW_ON_START").is_some() {
+                app_log("CLIPPY_SHOW_ON_START set: showing main window");
+                IS_PINNED.store(true, Ordering::SeqCst);
+                show_main_window(app.handle());
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
