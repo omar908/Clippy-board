@@ -1,19 +1,64 @@
 :root {
+  color-scheme: dark;
+
+  /* Surfaces */
   --bg-window: rgba(24, 26, 32, 0.94);
   --bg-surface: #1e2129;
   --bg-card: #252934;
   --bg-card-hover: #2e3442;
   --bg-card-selected: #343c4e;
+  --bg-sunken: rgba(0, 0, 0, 0.18);       /* docked preview panel */
+  --bg-image-well: rgba(0, 0, 0, 0.25);   /* preview image */
+  --bg-thumb-well: rgba(0, 0, 0, 0.35);   /* card thumbnail */
+
+  /* Borders */
   --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
   --border-active: #4d7cfe;
+
+  /* Text */
+  --text-strong: #fff;
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
+  --text-body: #e5e7eb;
+  --text-on-accent: #fff;
+
+  /* Accent */
   --accent-color: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.15);
+  --accent-border: rgba(59, 130, 246, 0.35);
+  --accent-text: #93c5fd;
+  --accent-count-bg: rgba(59, 130, 246, 0.3);
+  --accent-count-text: #bfdbfe;
+  --accent-ring: rgba(59, 130, 246, 0.25);
+
+  /* Neutral overlays: hover fills, scrollbars, key caps */
+  --overlay-1: rgba(255, 255, 255, 0.05);
+  --overlay-2: rgba(255, 255, 255, 0.1);
+  --overlay-3: rgba(255, 255, 255, 0.12);
+  --overlay-4: rgba(255, 255, 255, 0.22);
+  --overlay-5: rgba(255, 255, 255, 0.25);
+
+  /* Type badges */
   --tag-text: #60a5fa;
+  --tag-text-bg: rgba(96, 165, 250, 0.18);
   --tag-image: #f472b6;
+  --tag-image-bg: rgba(244, 114, 182, 0.18);
   --tag-file: #34d399;
+  --tag-file-bg: rgba(52, 211, 153, 0.18);
+
+  /* Danger */
   --danger-color: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.2);
+
+  /* Effects */
+  --shadow-window: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
+
+  /* Layout — the docked panel (styles.css) and the separate preview window
+     (preview.ts) share this single width. */
+  --preview-width: 480px;
+
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -46,7 +91,7 @@ html, body {
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  box-shadow: var(--shadow-window);
   overflow: hidden;
 }
 
@@ -75,7 +120,7 @@ html, body {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.2px;
-  color: #fff;
+  color: var(--text-strong);
 }
 
 .header-actions {
@@ -100,13 +145,13 @@ html, body {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--overlay-2);
   color: var(--text-primary);
 }
 
 .icon-btn.active {
   background: var(--accent-color);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* Search & Tabs */
@@ -130,7 +175,7 @@ html, body {
 
 .search-bar:focus-within {
   border-color: var(--border-active);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 .search-icon {
@@ -169,7 +214,7 @@ html, body {
 
 .search-clear-btn:hover {
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--overlay-2);
 }
 
 /* Filter Tabs */
@@ -194,33 +239,31 @@ html, body {
 }
 
 .filter-tab:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-1);
   color: var(--text-primary);
 }
 
 .filter-tab.active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
-  border-color: rgba(59, 130, 246, 0.35);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-color: var(--accent-border);
 }
 
 .tab-count {
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--overlay-2);
   padding: 1px 5px;
   border-radius: 10px;
   color: var(--text-muted);
 }
 
 .filter-tab.active .tab-count {
-  background: rgba(59, 130, 246, 0.3);
-  color: #bfdbfe;
+  background: var(--accent-count-bg);
+  color: var(--accent-count-text);
 }
 
 /* List column: chrome (header/search/footer) bundled with the list so the
-   preview panel's widening never shifts the header buttons, search bar, or
-   footer — they're anchored to this column, whose screen position is
-   invariant (the flip keeps it exactly in place). */
+   docked preview panel never shifts the header buttons, search bar, or footer. */
 .list-column {
   position: relative; /* anchors the resize grip to the main GUI, not the popup */
   display: flex;
@@ -242,37 +285,31 @@ html, body {
 }
 
 .history-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--overlay-3);
   border-radius: 3px;
 }
 
 .history-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--overlay-4);
 }
 
-/* Preview Panel */
+/* Preview Panel (docked presentation: only used when neither side of the main
+   window has room; the separate window is the normal case). */
 .preview-panel {
   display: none;
-  /* Fixed 480 px column (matches PANEL_W): while the preview is open, window
-     resizes apply to the list column only — the panel never changes width. */
-  flex: 0 0 480px;
+  /* Fixed column width, shared with the separate preview window: preview.ts
+     reads --preview-width for its geometry, so the two presentations cannot
+     drift apart. */
+  flex: 0 0 var(--preview-width);
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--bg-sunken);
   border-left: 1px solid var(--border-subtle);
 }
 
 .preview-panel.open {
   display: flex;
-}
-
-/* Flipped to the left side of the list when widening would cross the
-   screen's right edge — the list column keeps its exact position. */
-.preview-panel.panel-left {
-  order: -1;
-  border-left: none;
-  border-right: 1px solid var(--border-subtle);
 }
 
 .preview-header {
@@ -326,7 +363,7 @@ html, body {
   min-height: 0;
   overflow: auto;
   display: flex;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--bg-image-well);
   border-radius: var(--radius-sm);
   cursor: zoom-in;
 }
@@ -387,14 +424,14 @@ html, body {
 .preview-text::-webkit-scrollbar-thumb,
 .preview-image-wrap::-webkit-scrollbar-thumb,
 .preview-file-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--overlay-3);
   border-radius: 3px;
 }
 
 .preview-text::-webkit-scrollbar-thumb:hover,
 .preview-image-wrap::-webkit-scrollbar-thumb:hover,
 .preview-file-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--overlay-4);
 }
 
 /* Preview window: body.preview-window shows only the preview panel,
@@ -443,7 +480,7 @@ body.preview-window .preview-panel {
 
 .history-item:hover {
   background: var(--bg-card-hover);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: var(--border-strong);
   transform: translateY(-1px);
 }
 
@@ -475,17 +512,17 @@ body.preview-window .preview-panel {
 }
 
 .item-badge.badge-text {
-  background: rgba(96, 165, 250, 0.18);
+  background: var(--tag-text-bg);
   color: var(--tag-text);
 }
 
 .item-badge.badge-image {
-  background: rgba(244, 114, 182, 0.18);
+  background: var(--tag-image-bg);
   color: var(--tag-image);
 }
 
 .item-badge.badge-file {
-  background: rgba(52, 211, 153, 0.18);
+  background: var(--tag-file-bg);
   color: var(--tag-file);
 }
 
@@ -533,12 +570,12 @@ body.preview-window .preview-panel {
 }
 
 .item-action-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--overlay-3);
   color: var(--text-primary);
 }
 
 .item-action-btn.btn-delete:hover {
-  background: rgba(239, 68, 68, 0.2);
+  background: var(--danger-soft);
   color: var(--danger-color);
 }
 
@@ -546,7 +583,7 @@ body.preview-window .preview-panel {
 .item-content-text {
   font-size: 12.5px;
   line-height: 1.45;
-  color: #e5e7eb;
+  color: var(--text-body);
   word-break: break-word;
   white-space: pre-wrap;
   max-height: 48px;
@@ -561,7 +598,7 @@ body.preview-window .preview-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--bg-thumb-well);
   border-radius: var(--radius-sm);
   padding: 6px;
   max-height: 120px;
@@ -586,7 +623,7 @@ body.preview-window .preview-panel {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #e5e7eb;
+  color: var(--text-body);
 }
 
 .file-icon {
@@ -635,7 +672,7 @@ body.preview-window .preview-panel {
 
 .empty-hint {
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--overlay-1);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -659,8 +696,8 @@ body.preview-window .preview-panel {
   bottom: 5px;
   width: 9px;
   height: 9px;
-  border-right: 2px solid rgba(255, 255, 255, 0.25);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.25);
+  border-right: 2px solid var(--overlay-5);
+  border-bottom: 2px solid var(--overlay-5);
   border-radius: 0 0 3px 0;
 }
 
@@ -688,8 +725,8 @@ body.preview-window .preview-panel {
 }
 
 kbd {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--overlay-2);
+  border: 1px solid var(--border-strong);
   border-radius: 3px;
   padding: 1px 4px;
   font-family: monospace;

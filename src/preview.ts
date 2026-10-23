@@ -8,8 +8,21 @@ import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import type { ClipboardItem } from "./types";
+import { resolvePreviewPlacement } from "./placement";
+import type { Placement } from "./placement";
 
-const PREVIEW_W = 480;         // logical px — preview window width
+/** Logical width of the preview column. Read from the stylesheet token so the
+ *  docked panel (styles.css) and the separate window (here) share one value. */
+let cachedPreviewWidth: number | null = null;
+function previewColumnWidth(): number {
+  if (cachedPreviewWidth === null) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--preview-width");
+    const parsed = Number.parseFloat(raw);
+    cachedPreviewWidth = Number.isFinite(parsed) ? parsed : 480;
+  }
+  return cachedPreviewWidth;
+}
+
 const PREVIEW_GAP = 8;         // logical px — gap between main and preview
 const GRACE_MS = 350;          // close shortly after the cursor leaves the window
 const HOLD_QUIET_MS = 150;     // grace stays held this long after the last drag/resize event
@@ -437,61 +450,29 @@ function initPreviewWindow(): void {
 // the main window's move/resize. The main window itself never changes size.
 // ---------------------------------------------------------------------------
 
-/** A resolved presentation for the preview: either a separate window rectangle
- *  (physical px), or "docked" — render the panel inside the main window. */
-interface Placement {
-  docked: boolean;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 /** Resolve where the preview should go for the main window's current geometry.
  *
- *  Preference order: right of the window, then left of it, then docked inside
- *  it. "Fits" means the whole window would land inside the monitor's work
- *  area — a clamped position that overlaps the main window is not a fit, since
- *  the preview would cover the list it is previewing. */
+ *  Reads the geometry from Tauri, then defers the actual rules to
+ *  `resolvePreviewPlacement` (pure and unit-tested). */
 async function computePreviewPlacement(win: ReturnType<typeof getCurrentWindow>): Promise<Placement> {
   const scale = await win.scaleFactor();
   const pos = await win.outerPosition();     // physical
   const size = await win.outerSize();        // physical
   const mon = await currentMonitor();
 
-  const gap = Math.round(PREVIEW_GAP * scale);
-  const previewW = Math.round(PREVIEW_W * scale);
-  const previewH = size.height;
-
-  if (mon) {
-    const waLeft = mon.workArea.position.x;
-    const waRight = waLeft + mon.workArea.size.width;
-
-    // Right of the window.
-    const rightX = pos.x + size.width + gap;
-    if (rightX + previewW <= waRight) {
-      return { docked: false, x: rightX, y: pos.y, width: previewW, height: previewH };
-    }
-
-    // Left of the window (flipped so the list keeps its screen position).
-    const leftX = pos.x - previewW - gap;
-    if (leftX >= waLeft) {
-      return { docked: false, x: leftX, y: pos.y, width: previewW, height: previewH };
-    }
-  } else {
-    // No monitor information: assume there is room on the right.
-    return {
-      docked: false,
-      x: pos.x + size.width + gap,
-      y: pos.y,
-      width: previewW,
-      height: previewH,
-    };
-  }
-
-  // Neither side fits: the window is (near) as wide as the work area. Dock the
-  // panel inside the main window instead of covering the list.
-  return { docked: true, x: 0, y: 0, width: previewW, height: previewH };
+  return resolvePreviewPlacement({
+    main: { x: pos.x, y: pos.y, width: size.width, height: size.height },
+    workArea: mon
+      ? {
+          x: mon.workArea.position.x,
+          y: mon.workArea.position.y,
+          width: mon.workArea.size.width,
+          height: mon.workArea.size.height,
+        }
+      : null,
+    previewWidth: Math.round(previewColumnWidth() * scale),
+    gap: Math.round(PREVIEW_GAP * scale),
+  });
 }
 
 /**
