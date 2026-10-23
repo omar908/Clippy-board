@@ -1,9 +1,9 @@
-# ADR-0006. Full-content preview in a separate window, docking inside when there is no room
+# ADR-0007. Full-content preview in a separate window, docking inside when there is no room
 
 **Status:** Accepted
 **Date:** 2026-10-22
 **Deciders:** Omar Estrada
-**Related:** supersedes [ADR-0005](0005-full-content-preview-via-window-widening.md); [ADR-0002](0002-popup-hide-on-blur-with-interaction-guard.md) (blur/hide guards); implemented in `src/preview.ts`, `src/main.ts`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, `src/styles.css`
+**Related:** supersedes [ADR-0005](0005-full-content-preview-via-window-widening.md); builds on [ADR-0006](0006-suppress-layout-induced-hover-during-resize.md) (hover guard during native resize) and [ADR-0002](0002-popup-hide-on-blur-with-interaction-guard.md) (blur/hide guards); implemented in `src/preview.ts`, `src/main.ts`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, `src/styles.css`
 
 ## Context
 
