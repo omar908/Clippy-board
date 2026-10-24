@@ -265,6 +265,24 @@ async function main() {
   console.log("nav state after Home/PageDown/End:", JSON.stringify(navState));
   if (!navState.selectedId) throw new Error("Expected a selected item after keyboard navigation");
 
+  // Re-acquire card position after navigation/filter changes
+  const cardHover = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const el =
+        document.querySelector('.history-item[data-id="smoke-text-long"]') ||
+        document.querySelector('.history-item');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        id: el.dataset.id,
+        text: el.innerText.slice(0, 60),
+      };
+    })())`),
+  );
+  if (!cardHover) throw new Error("No card found for hover");
+
   // Move mouse to trigger preview on the card
   const move = async (x, y) => {
     await main.conn.send("Input.dispatchMouseEvent", {
@@ -277,8 +295,8 @@ async function main() {
     await sleep(150);
   };
   await move(60, 30);
-  await move(card.x, card.y);
-  await move(card.x + 6, card.y + 4);
+  await move(cardHover.x, cardHover.y);
+  await move(cardHover.x + 6, cardHover.y + 4);
 
   let pstate = null;
   let dockState = null;
@@ -332,7 +350,7 @@ async function main() {
 
   // When the deterministic fixture is present, make sure the synthetic hover
   // actually drove the preview rather than leaving stale content behind.
-  if (card.id === "smoke-text-long") {
+  if (cardHover.id === "smoke-text-long") {
     const body = docked ? dockState.bodyText : pstate.bodyText;
     if (!body || !body.includes("Clippy-board smoke-test")) {
       throw new Error(
