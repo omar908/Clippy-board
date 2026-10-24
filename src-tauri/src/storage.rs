@@ -17,7 +17,8 @@ const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS history (
         id        TEXT PRIMARY KEY,
         timestamp INTEGER NOT NULL,
-        payload   TEXT NOT NULL
+        payload   TEXT NOT NULL,
+        pinned    INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC);
 ";
@@ -32,6 +33,8 @@ pub fn open(path: &Path) -> Result<Connection, String> {
         .map_err(|e| format!("failed to open db {}: {}", path.display(), e))?;
     conn.execute_batch(SCHEMA)
         .map_err(|e| format!("failed to create schema: {}", e))?;
+    // Migration for existing DBs
+    let _ = conn.execute("ALTER TABLE history ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0", []);
     // WAL keeps readers from blocking the writer; adequate for a single-process app
     conn.pragma_update(None, "journal_mode", "WAL").ok();
     Ok(conn)
@@ -44,10 +47,50 @@ pub fn open(path: &Path) -> Result<Connection, String> {
 /// copies are dropped — the in-memory history is always duplicate-free.
 pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
     let mut items = Vec::new();
-    let mut stmt = match conn.prepare("SELECT id, timestamp, payload FROM history ORDER BY timestamp DESC") {
+    let mut stmt = match conn.prepare("SELECT id, timestamp, payload, pinned FROM history ORDER BY timestamp DESC") {
         Ok(s) => s,
         Err(e) => {
-            crate::app_log(&format!("storage: failed to prepare load: {}", e));
+            // Try without pinned column for old DBs
+            let mut stmt2 = match conn.prepare("SELECT id, timestamp, payload FROM history ORDER BY timestamp DESC") {
+                Ok(s) => s,
+                Err(e2) => {
+                    crate::app_log(&format!("storage: failed to prepare load: {}", e2));
+                    return items;
+                }
+            };
+            let rows = match stmt2.query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            }) {
+                Ok(r) => r,
+                Err(e2) => {
+                    crate::app_log(&format!("storage: failed to query history: {}", e2));
+                    return items;
+                }
+            };
+            let mut seen_payloads: Vec<String> = Vec::new();
+            for row in rows.flatten() {
+                let (id, timestamp, payload_json) = row;
+                if seen_payloads.contains(&payload_json) {
+                    crate::app_log(&format!("storage: dropping duplicate payload row {}", id));
+                    continue;
+                }
+                match serde_json::from_str::<ClipboardPayload>(&payload_json) {
+                    Ok(payload) => {
+                        seen_payloads.push(payload_json);
+                        items.push(ClipboardItem {
+                            id,
+                            timestamp: timestamp as u64,
+                            pinned: false,
+                            payload,
+                        })
+                    }
+                    Err(e2) => crate::app_log(&format!("storage: skipping corrupt item {}: {}", id, e2)),
+                }
+            }
             return items;
         }
     };
@@ -56,6 +99,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
             row.get::<_, String>(0)?,
             row.get::<_, i64>(1)?,
             row.get::<_, String>(2)?,
+            row.get::<_, i32>(3)?,
         ))
     }) {
         Ok(r) => r,
@@ -66,7 +110,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
     };
     let mut seen_payloads: Vec<String> = Vec::new();
     for row in rows.flatten() {
-        let (id, timestamp, payload_json) = row;
+        let (id, timestamp, payload_json, pinned) = row;
         // Rows are newest-first; skip any payload we've already accepted.
         if seen_payloads.contains(&payload_json) {
             crate::app_log(&format!("storage: dropping duplicate payload row {}", id));
@@ -78,6 +122,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
                 items.push(ClipboardItem {
                     id,
                     timestamp: timestamp as u64,
+                    pinned: pinned != 0,
                     payload,
                 })
             }
@@ -92,8 +137,8 @@ pub fn insert(conn: &Connection, item: &ClipboardItem) -> Result<(), String> {
     let payload_json = serde_json::to_string(&item.payload)
         .map_err(|e| format!("failed to serialize payload: {}", e))?;
     conn.execute(
-        "INSERT OR REPLACE INTO history (id, timestamp, payload) VALUES (?1, ?2, ?3)",
-        params![item.id, item.timestamp as i64, payload_json],
+        "INSERT OR REPLACE INTO history (id, timestamp, payload, pinned) VALUES (?1, ?2, ?3, ?4)",
+        params![item.id, item.timestamp as i64, payload_json, if item.pinned { 1i32 } else { 0i32 }],
     )
     .map_err(|e| format!("failed to insert item: {}", e))?;
     Ok(())
@@ -113,11 +158,17 @@ pub fn clear(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-/// Trim history to `keep` items, dropping the oldest.
+/// Trim history to `keep` items, dropping the oldest (respecting pins).
 pub fn trim(conn: &Connection, keep: usize) -> Result<(), String> {
+    // Delete unpinned items beyond keep limit, always keep all pinned items
+    if keep == 0 {
+        conn.execute("DELETE FROM history WHERE pinned = 0", [])
+            .map_err(|e| format!("failed to trim history: {}", e))?;
+        return Ok(());
+    }
     conn.execute(
-        "DELETE FROM history WHERE id NOT IN (
-             SELECT id FROM history ORDER BY timestamp DESC LIMIT ?1
+        "DELETE FROM history WHERE pinned = 0 AND id NOT IN (
+             SELECT id FROM (SELECT id FROM history WHERE pinned = 0 ORDER BY timestamp DESC LIMIT ?1)
          )",
         params![keep as i64],
     )
@@ -142,6 +193,7 @@ mod tests {
         ClipboardItem {
             id: id.to_string(),
             timestamp: ts,
+            pinned: false,
             payload: ClipboardPayload::Text {
                 text: text.to_string(),
                 preview,

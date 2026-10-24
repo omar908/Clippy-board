@@ -85,6 +85,14 @@ function filterAndRender() {
     return true;
   });
 
+  // Sort: pinned items first, then by timestamp (newest first)
+  filteredHistory.sort((a, b) => {
+    if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) {
+      return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+    }
+    return b.timestamp - a.timestamp;
+  });
+
   if (selectedIndex >= filteredHistory.length) {
     selectedIndex = Math.max(0, filteredHistory.length - 1);
   }
@@ -112,7 +120,7 @@ function renderList() {
 
   filteredHistory.forEach((item, index) => {
     const card = document.createElement("div");
-    card.className = `history-item ${index === selectedIndex ? "selected" : ""}`;
+    card.className = `history-item ${index === selectedIndex ? "selected" : ""} ${item.pinned ? "pinned" : ""}`;
     card.setAttribute("data-id", item.id);
 
     // Meta row
@@ -129,6 +137,14 @@ function renderList() {
     const time = document.createElement("span");
     time.className = "item-time";
     time.textContent = formatTime(item.timestamp);
+
+    if (item.pinned) {
+      const pinBadge = document.createElement("span");
+      pinBadge.className = "item-pin-badge";
+      pinBadge.textContent = "📌";
+      pinBadge.title = "Pinned (locked)";
+      metaLeft.appendChild(pinBadge);
+    }
 
     const details = document.createElement("span");
     details.className = "item-details";
@@ -149,12 +165,28 @@ function renderList() {
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    // Only delete lives here: the whole card is already the copy button
-    // (click and Enter both copy — a per-card Copy button was redundant).
+    // Pin/Unpin button
+    const pinBtnItem = document.createElement("button");
+    pinBtnItem.className = "item-action-btn btn-pin";
+    pinBtnItem.title = item.pinned ? "Unpin (unlock)" : "Pin (lock)";
+    pinBtnItem.setAttribute("aria-label", item.pinned ? "Unpin" : "Pin");
+    pinBtnItem.innerHTML = item.pinned ? "📌" : "📍";
+    pinBtnItem.onclick = (e) => {
+      e.stopPropagation();
+      togglePin(item.id);
+    };
+
+    // Delete button (disabled for pinned items)
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "item-action-btn btn-delete";
-    deleteBtn.title = "Delete from history";
-    deleteBtn.setAttribute("aria-label", "Delete from history");
+    if (item.pinned) {
+      deleteBtn.disabled = true;
+      deleteBtn.title = "Unpin to delete";
+      deleteBtn.setAttribute("aria-label", "Pinned - unpin to delete");
+    } else {
+      deleteBtn.title = "Delete from history";
+      deleteBtn.setAttribute("aria-label", "Delete from history");
+    }
     deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
       stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M2.5 4.5h11" />
@@ -164,9 +196,11 @@ function renderList() {
     </svg>`;
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
+      if (item.pinned) return;
       deleteItem(item.id);
     };
 
+    actions.appendChild(pinBtnItem);
     actions.appendChild(deleteBtn);
 
     headerRow.appendChild(metaLeft);
@@ -262,12 +296,30 @@ async function selectItem(id: string) {
 
 async function deleteItem(id: string) {
   try {
+    const item = history.find((i) => i.id === id);
+    if (item?.pinned) {
+      console.warn("Cannot delete pinned item");
+      return;
+    }
     await invoke("delete_item", { id });
     history = history.filter((i) => i.id !== id);
     updateCounts();
     filterAndRender();
   } catch (err) {
     console.error("Failed to delete item:", err);
+  }
+}
+
+async function togglePin(id: string) {
+  try {
+    const item = history.find((i) => i.id === id);
+    if (!item) return;
+    item.pinned = !item.pinned;
+    await invoke("toggle_pin", { id, pinned: item.pinned });
+    updateCounts();
+    filterAndRender();
+  } catch (err) {
+    console.error("Failed to toggle pin:", err);
   }
 }
 

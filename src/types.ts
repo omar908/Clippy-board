@@ -31,4 +31,5 @@ export type ClipboardPayload =
 export type ClipboardItem = {
   id: string;
   timestamp: number;
+  pinned?: boolean;
 } & ClipboardPayload;

@@ -59,11 +59,34 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
 #[tauri::command]
 fn delete_item(state: State<ClipboardState>, id: String) -> Result<(), String> {
     let mut history = state.history.lock().unwrap();
+    // Don't delete pinned items
+    if let Some(item) = history.iter().find(|i| i.id == id) {
+        if item.pinned {
+            return Err("Cannot delete pinned item".to_string());
+        }
+    }
     history.retain(|i| i.id != id);
     drop(history);
     let db = state.db.lock().unwrap();
     if let Some(conn) = db.as_ref() {
         storage::delete(conn, &id)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_pin(state: State<ClipboardState>, id: String, pinned: bool) -> Result<(), String> {
+    let mut history = state.history.lock().unwrap();
+    if let Some(item) = history.iter_mut().find(|i| i.id == id) {
+        item.pinned = pinned;
+    }
+    let item = history.iter().find(|i| i.id == id).cloned();
+    drop(history);
+    if let Some(item) = item {
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            storage::insert(conn, &item)?;
+        }
     }
     Ok(())
 }
@@ -625,6 +648,7 @@ pub fn run() {
             get_history,
             select_item,
             delete_item,
+            toggle_pin,
             clear_history,
             hide_window,
             show_window,

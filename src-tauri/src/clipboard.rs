@@ -40,6 +40,8 @@ pub enum ClipboardPayload {
 pub struct ClipboardItem {
     pub id: String,
     pub timestamp: u64,
+    #[serde(default)]
+    pub pinned: bool,
     #[serde(flatten)]
     pub payload: ClipboardPayload,
 }
@@ -450,6 +452,7 @@ fn record_capture(
                 let item = ClipboardItem {
                     id: format!("{}-{}", now, history.len() + 1),
                     timestamp: now,
+                    pinned: false,
                     payload,
                 };
                 crate::app_log(&format!(
@@ -458,7 +461,19 @@ fn record_capture(
                 ));
                 history.insert(0, item.clone());
                 if history.len() > crate::storage::MAX_HISTORY {
-                    history.truncate(crate::storage::MAX_HISTORY);
+                    // Don't trim pinned items
+                    let mut kept = Vec::new();
+                    let mut unpinned = Vec::new();
+                    for i in history.drain(..) {
+                        if i.pinned {
+                            kept.push(i);
+                        } else {
+                            unpinned.push(i);
+                        }
+                    }
+                    unpinned.truncate(crate::storage::MAX_HISTORY.saturating_sub(kept.len()));
+                    kept.extend(unpinned);
+                    *history = kept;
                 }
                 item
             }
