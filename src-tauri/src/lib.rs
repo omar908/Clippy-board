@@ -92,15 +92,34 @@ fn toggle_pin(state: State<ClipboardState>, id: String, pinned: bool) -> Result<
 }
 
 #[tauri::command]
-fn clear_history(state: State<ClipboardState>) -> Result<(), String> {
+fn clear_history(
+    state: State<ClipboardState>,
+    ids: Option<Vec<String>>,
+) -> Result<Vec<String>, String> {
     let mut history = state.history.lock().unwrap();
-    history.clear();
+    // Pinned entries are never cleared. When `ids` is given, only those items
+    // are considered (the frontend passes whatever is in the current view);
+    // None falls back to "all unpinned items".
+    let removed: Vec<String> = history
+        .iter()
+        .filter(|item| !item.pinned)
+        .filter(|item| match &ids {
+            Some(ids) => ids.contains(&item.id),
+            None => true,
+        })
+        .map(|item| item.id.clone())
+        .collect();
+
+    history.retain(|item| !removed.contains(&item.id));
     drop(history);
+
     let db = state.db.lock().unwrap();
     if let Some(conn) = db.as_ref() {
-        storage::clear(conn)?;
+        for id in &removed {
+            storage::delete(conn, id)?;
+        }
     }
-    Ok(())
+    Ok(removed)
 }
 
 /// Hide the main window and notify the frontend.

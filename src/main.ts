@@ -98,6 +98,7 @@ function filterAndRender() {
   }
 
   renderList();
+  updateClearButtonState();
   previewRefresh();
 }
 
@@ -323,15 +324,35 @@ async function togglePin(id: string) {
   }
 }
 
-async function clearAll() {
+async function clearView() {
+  // Clear only what the user is currently looking at (active tab + search),
+  // and never pinned entries — those must be unlocked first.
+  const ids = filteredHistory.filter((i) => !i.pinned).map((i) => i.id);
+  if (ids.length === 0) return;
   try {
-    await invoke("clear_history");
-    history = [];
+    const removed = await invoke<string[]>("clear_history", { ids });
+    const gone = new Set(removed);
+    history = history.filter((i) => !gone.has(i.id));
     updateCounts();
     filterAndRender();
   } catch (err) {
     console.error("Failed to clear history:", err);
   }
+}
+
+/** Keep the trash button's tooltip honest about its scope. */
+function updateClearButtonState() {
+  const clearable = filteredHistory.filter((i) => !i.pinned).length;
+  const scope = searchQuery.trim()
+    ? "matching items"
+    : currentFilter === "all"
+      ? "all unpinned items"
+      : `${currentFilter} items`;
+  clearBtn.disabled = clearable === 0;
+  clearBtn.title =
+    clearable === 0
+      ? "Nothing to clear here (pinned entries are kept)"
+      : `Clear ${scope} in this view (pinned entries are kept)`;
 }
 
 async function fetchInitialHistory() {
@@ -343,6 +364,8 @@ async function fetchInitialHistory() {
     console.error("Failed to load initial history:", err);
   }
 }
+
+updateClearButtonState();
 
 // --- Stationary-cursor guard ------------------------------------------------
 // Hover and arrows move the same selection (hover IS selection). But a
@@ -582,7 +605,7 @@ pinBtn.addEventListener("click", async () => {
 });
 
 clearBtn.addEventListener("click", () => {
-  clearAll();
+  clearView();
 });
 
 closeBtn.addEventListener("click", () => {
