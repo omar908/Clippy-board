@@ -193,14 +193,25 @@ async function main() {
     })())`),
   );
   if (!card) throw new Error("No card found");
-  // Tab cycling with Left/Right (exercises filter buttons + keyboard path)
+
+  const sendKey = async (key) => {
+    await main.conn.send("Input.dispatchKeyEvent", { type: "keyDown", key });
+    await main.conn.send("Input.dispatchKeyEvent", { type: "keyUp", key });
+    await sleep(200);
+  };
+
+  // Test tab cycling with Left/Right (exercises filter buttons + keyboard path)
   await main.conn.evaluate(`(() => {
     const tabs = [...document.querySelectorAll('.filter-tab')];
     tabs.forEach(t => t.classList.remove('active'));
-    tabs.find(t => t.dataset.filter === 'file')?.classList.add('active');
-    document.querySelector('.app-title')?.click();
+    tabs.find(t => t.dataset.filter === 'all')?.classList.add('active');
   })()`);
-  await sleep(300);
+  await sleep(200);
+  
+  await main.conn.evaluate(`document.body.focus()`);
+  await sendKey("ArrowRight");
+  await sleep(200);
+  
   const tabState = JSON.parse(
     await main.conn.evaluate(`JSON.stringify((() => {
       const tabs = [...document.querySelectorAll('.filter-tab')];
@@ -208,13 +219,11 @@ async function main() {
       return { active: active?.dataset.filter, count: tabs.length };
     })())`),
   );
-  console.log("tab state before arrow:", JSON.stringify(tabState));
-  const sendKey = async (key) => {
-    await main.conn.send("Input.dispatchKeyEvent", { type: "keyDown", key });
-    await main.conn.send("Input.dispatchKeyEvent", { type: "keyUp", key });
-    await sleep(200);
-  };
+  console.log("tab state after ArrowRight:", JSON.stringify(tabState));
+  if (!tabState.active) throw new Error("Expected an active filter tab after ArrowRight");
+  
   await sendKey("ArrowLeft");
+  await sleep(200);
   const tabState2 = JSON.parse(
     await main.conn.evaluate(`JSON.stringify((() => {
       const tabs = [...document.querySelectorAll('.filter-tab')];
@@ -223,6 +232,15 @@ async function main() {
     })())`),
   );
   console.log("tab state after ArrowLeft:", JSON.stringify(tabState2));
+  if (!tabState2.active) throw new Error("Expected an active filter tab after ArrowLeft");
+
+  // Reset to 'all' filter
+  await main.conn.evaluate(`(() => {
+    const tabs = [...document.querySelectorAll('.filter-tab')];
+    tabs.forEach(t => t.classList.remove('active'));
+    tabs.find(t => t.dataset.filter === 'all')?.classList.add('active');
+  })()`);
+  await sleep(300);
 
   // List navigation with Home/End/PageDown
   await main.conn.send("Input.dispatchMouseEvent", {
@@ -246,7 +264,23 @@ async function main() {
   );
   console.log("nav state after Home/PageDown/End:", JSON.stringify(navState));
   if (!navState.selectedId) throw new Error("Expected a selected item after keyboard navigation");
-  if (!tabState2.active) throw new Error("Expected an active filter tab after ArrowLeft");
+
+  // Move mouse to trigger preview on the card
+  const move = async (x, y) => {
+    await main.conn.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x,
+      y,
+      button: "none",
+      pointerType: "mouse",
+    });
+    await sleep(150);
+  };
+  await move(60, 30);
+  await move(card.x, card.y);
+  await move(card.x + 6, card.y + 4);
+
+  let pstate = null;
   let dockState = null;
   for (let i = 0; i < 40; i++) {
     await sleep(250);
