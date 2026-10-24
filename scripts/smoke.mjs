@@ -193,24 +193,60 @@ async function main() {
     })())`),
   );
   if (!card) throw new Error("No card found");
-  console.log("hovering card:", JSON.stringify(card));
-
-  const move = async (x, y) => {
-    await main.conn.send("Input.dispatchMouseEvent", {
-      type: "mouseMoved",
-      x,
-      y,
-      button: "none",
-      pointerType: "mouse",
-    });
-    await sleep(150);
+  // Tab cycling with Left/Right (exercises filter buttons + keyboard path)
+  await main.conn.evaluate(`(() => {
+    const tabs = [...document.querySelectorAll('.filter-tab')];
+    tabs.forEach(t => t.classList.remove('active'));
+    tabs.find(t => t.dataset.filter === 'file')?.classList.add('active');
+    document.querySelector('.app-title')?.click();
+  })()`);
+  await sleep(300);
+  const tabState = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const tabs = [...document.querySelectorAll('.filter-tab')];
+      const active = tabs.find(t => t.classList.contains('active'));
+      return { active: active?.dataset.filter, count: tabs.length };
+    })())`),
+  );
+  console.log("tab state before arrow:", JSON.stringify(tabState));
+  const sendKey = async (key) => {
+    await main.conn.send("Input.dispatchKeyEvent", { type: "keyDown", key });
+    await main.conn.send("Input.dispatchKeyEvent", { type: "keyUp", key });
+    await sleep(200);
   };
-  // The first synthetic move is swallowed by the resize/hover guard.
-  await move(60, 30);
-  await move(card.x, card.y);
-  await move(card.x + 6, card.y + 4);
+  await sendKey("ArrowLeft");
+  const tabState2 = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const tabs = [...document.querySelectorAll('.filter-tab')];
+      const active = tabs.find(t => t.classList.contains('active'));
+      return { active: active?.dataset.filter };
+    })())`),
+  );
+  console.log("tab state after ArrowLeft:", JSON.stringify(tabState2));
 
-  let pstate = null;
+  // List navigation with Home/End/PageDown
+  await main.conn.send("Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x: 60,
+    y: 30,
+    button: "none",
+    pointerType: "mouse",
+  });
+  await sleep(100);
+  await main.conn.evaluate(`document.body.focus()`);
+  await sendKey("Home");
+  await sendKey("PageDown");
+  await sendKey("End");
+  await sleep(200);
+  const navState = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const sel = document.querySelector('.history-item.selected');
+      return { selectedId: sel?.dataset.id || null, count: document.querySelectorAll('.history-item').length };
+    })())`),
+  );
+  console.log("nav state after Home/PageDown/End:", JSON.stringify(navState));
+  if (!navState.selectedId) throw new Error("Expected a selected item after keyboard navigation");
+  if (!tabState2.active) throw new Error("Expected an active filter tab after ArrowLeft");
   let dockState = null;
   for (let i = 0; i < 40; i++) {
     await sleep(250);
