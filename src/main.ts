@@ -372,6 +372,14 @@ window.addEventListener("mousemove", (e) => {
 
 /** Apply an arrow/enter key to the list selection. Shared by the main
  *  window's own key handling and by keys forwarded from the preview window. */
+function cycleFilterTab(delta: number): void {
+  const tabs = Array.from(filterTabs);
+  const idx = tabs.findIndex((t) => t.classList.contains("active"));
+  if (idx === -1 || tabs.length === 0) return;
+  const next = (idx + delta + tabs.length) % tabs.length;
+  tabs[next].click();
+}
+
 function handleListKey(key: string): void {
   if (key === "ArrowDown") {
     if (filteredHistory.length > 0) {
@@ -387,6 +395,34 @@ function handleListKey(key: string): void {
       renderList();
       previewSelectionChanged();
     }
+  } else if (key === "Home") {
+    if (filteredHistory.length > 0) {
+      takeOverForKeyboard();
+      selectedIndex = 0;
+      renderList();
+      previewSelectionChanged();
+    }
+  } else if (key === "End") {
+    if (filteredHistory.length > 0) {
+      takeOverForKeyboard();
+      selectedIndex = filteredHistory.length - 1;
+      renderList();
+      previewSelectionChanged();
+    }
+  } else if (key === "PageDown") {
+    if (filteredHistory.length > 0) {
+      takeOverForKeyboard();
+      selectedIndex = Math.min(selectedIndex + 10, filteredHistory.length - 1);
+      renderList();
+      previewSelectionChanged();
+    }
+  } else if (key === "PageUp") {
+    if (filteredHistory.length > 0) {
+      takeOverForKeyboard();
+      selectedIndex = Math.max(selectedIndex - 10, 0);
+      renderList();
+      previewSelectionChanged();
+    }
   } else if (key === "Enter") {
     // One flow: Enter always copies the highlighted item — whichever input
     // (hover or arrows) last moved the highlight.
@@ -399,7 +435,14 @@ function handleListKey(key: string): void {
 
 // Keyboard Navigation
 window.addEventListener("keydown", (e) => {
-  const navKey = e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter";
+  const navKey =
+    e.key === "ArrowDown" ||
+    e.key === "ArrowUp" ||
+    e.key === "Enter" ||
+    e.key === "Home" ||
+    e.key === "End" ||
+    e.key === "PageUp" ||
+    e.key === "PageDown";
   // Modifier+arrow means "extend the text selection in the preview", not
   // "move the list selection" — leave those to the browser.
   const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
@@ -415,6 +458,9 @@ window.addEventListener("keydown", (e) => {
       // Escape closes the app from the preview window too.
       e.preventDefault();
       void emitTo("main", "preview-forward-key", { key: "Escape" }).catch(() => {});
+    } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !modified) {
+      e.preventDefault();
+      void emitTo("main", "preview-forward-key", { key: e.key }).catch(() => {});
     }
     return;
   }
@@ -422,6 +468,9 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     // Hide first, then restore the pre-preview geometry while invisible.
     invoke("hide_window").then(() => previewDismiss()).catch(() => {});
+  } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !modified) {
+    e.preventDefault();
+    cycleFilterTab(e.key === "ArrowRight" ? 1 : -1);
   } else if (navKey && !modified) {
     e.preventDefault();
     handleListKey(e.key);
@@ -434,6 +483,10 @@ void listen<{ key: string }>("preview-forward-key", (event) => {
   if (isPreviewWindow) return;
   if (event.payload.key === "Escape") {
     invoke("hide_window").then(() => previewDismiss()).catch(() => {});
+    return;
+  }
+  if (event.payload.key === "ArrowLeft" || event.payload.key === "ArrowRight") {
+    cycleFilterTab(event.payload.key === "ArrowRight" ? 1 : -1);
     return;
   }
   handleListKey(event.payload.key);
