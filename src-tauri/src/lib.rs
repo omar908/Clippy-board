@@ -1,5 +1,5 @@
-mod clipboard;
-mod storage;
+pub mod clipboard;
+pub mod storage;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;

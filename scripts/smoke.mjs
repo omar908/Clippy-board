@@ -242,6 +242,20 @@ async function main() {
   })()`);
   await sleep(300);
 
+  // Test Deleted tab exists
+  const deletedTabState = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const tabs = [...document.querySelectorAll('.filter-tab')];
+      const deletedTab = tabs.find(t => t.dataset.filter === 'deleted');
+      return { 
+        exists: !!deletedTab,
+        count: deletedTab?.querySelector('.tab-count')?.textContent || '0'
+      };
+    })())`),
+  );
+  console.log("deleted tab state:", JSON.stringify(deletedTabState));
+  if (!deletedTabState.exists) throw new Error("Expected Deleted tab to exist");
+
   // List navigation with Home/End/PageDown
   await main.conn.send("Input.dispatchMouseEvent", {
     type: "mouseMoved",
