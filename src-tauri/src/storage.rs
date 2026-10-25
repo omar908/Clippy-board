@@ -256,7 +256,7 @@ pub fn purge_deleted_before(conn: &Connection, before_ms: u64) -> Result<(), Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::clipboard::{ClipboardItem, ClipboardPayload};
+    use crate::clipboard::{ClipboardItem, ClipboardPayload, DeletedItem};
     use rusqlite::Connection;
 
     fn test_conn() -> Connection {
@@ -271,6 +271,21 @@ mod tests {
             id: id.to_string(),
             timestamp: ts,
             pinned: false,
+            payload: ClipboardPayload::Text {
+                text: text.to_string(),
+                preview,
+                char_count: text.len(),
+                line_count: text.lines().count().max(1),
+            },
+        }
+    }
+
+    fn deleted_item(id: &str, original_ts: u64, deleted_at: u64, text: &str) -> DeletedItem {
+        let preview = text.chars().take(80).collect::<String>();
+        DeletedItem {
+            id: id.to_string(),
+            original_timestamp: original_ts,
+            deleted_at,
             payload: ClipboardPayload::Text {
                 text: text.to_string(),
                 preview,
@@ -392,5 +407,63 @@ mod tests {
         let items = load(&conn);
         let ids: Vec<_> = items.iter().map(|i| i.id.as_str()).collect();
         assert_eq!(ids, vec!["2", "3", "1"]);
+    }
+
+    #[test]
+    fn load_deleted_empty_returns_empty() {
+        let conn = test_conn();
+        let items = load_deleted(&conn);
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn insert_and_load_deleted() {
+        let conn = test_conn();
+        let d = deleted_item("d1", 1000, 2000, "deleted text");
+        insert_deleted(&conn, &d).unwrap();
+        let items = load_deleted(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "d1");
+        assert_eq!(items[0].original_timestamp, 1000);
+        assert_eq!(items[0].deleted_at, 2000);
+        match &items[0].payload {
+            ClipboardPayload::Text { text, .. } => assert_eq!(text, "deleted text"),
+            _ => panic!("wrong payload"),
+        }
+    }
+
+    #[test]
+    fn delete_deleted_removes_item() {
+        let conn = test_conn();
+        insert_deleted(&conn, &deleted_item("d1", 1000, 2000, "x")).unwrap();
+        insert_deleted(&conn, &deleted_item("d2", 1000, 3000, "y")).unwrap();
+        delete_deleted(&conn, "d1").unwrap();
+        let items = load_deleted(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "d2");
+    }
+
+    #[test]
+    fn purge_deleted_before_removes_expired() {
+        let conn = test_conn();
+        insert_deleted(&conn, &deleted_item("d1", 1000, 1500, "x")).unwrap();
+        insert_deleted(&conn, &deleted_item("d2", 1000, 2500, "y")).unwrap();
+        purge_deleted_before(&conn, 2000).unwrap();
+        let items = load_deleted(&conn);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "d2");
+    }
+
+    #[test]
+    fn load_deleted_orders_by_deleted_at_desc() {
+        let conn = test_conn();
+        insert_deleted(&conn, &deleted_item("d1", 1000, 1500, "x")).unwrap();
+        insert_deleted(&conn, &deleted_item("d2", 1000, 3000, "y")).unwrap();
+        insert_deleted(&conn, &deleted_item("d3", 1000, 2000, "z")).unwrap();
+        let items = load_deleted(&conn);
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].id, "d2");
+        assert_eq!(items[1].id, "d3");
+        assert_eq!(items[2].id, "d1");
     }
 }
