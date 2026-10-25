@@ -33,3 +33,9 @@ export type ClipboardItem = {
   timestamp: number;
   pinned?: boolean;
 } & ClipboardPayload;
+
+export type DeletedItem = {
+  id: string;
+  original_timestamp: number;
+  deleted_at: number;
+} & ClipboardPayload;

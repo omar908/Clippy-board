@@ -8,7 +8,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
-use crate::clipboard::{ClipboardItem, ClipboardPayload};
+use crate::clipboard::{ClipboardItem, ClipboardPayload, DeletedItem};
 
 /// Maximum number of history items kept (matches the in-memory cap).
 pub const MAX_HISTORY: usize = 100;
@@ -21,6 +21,13 @@ const SCHEMA: &str = "
         pinned    INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_history_timestamp ON history(timestamp DESC);
+    CREATE TABLE IF NOT EXISTS deleted_items (
+        id             TEXT PRIMARY KEY,
+        original_ts    INTEGER NOT NULL,
+        deleted_at     INTEGER NOT NULL,
+        payload        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_deleted_deleted_at ON deleted_items(deleted_at DESC);
 ";
 
 /// Open (or create) the history database, creating parent directories as needed.
@@ -173,6 +180,76 @@ pub fn trim(conn: &Connection, keep: usize) -> Result<(), String> {
         params![keep as i64],
     )
     .map_err(|e| format!("failed to trim history: {}", e))?;
+    Ok(())
+}
+
+/// Load soft-deleted entries, most recent deletion first.
+pub fn load_deleted(conn: &Connection) -> Vec<DeletedItem> {
+    let mut items = Vec::new();
+    let mut stmt = match conn.prepare(
+        "SELECT id, original_ts, deleted_at, payload FROM deleted_items ORDER BY deleted_at DESC",
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            crate::app_log(&format!("storage: failed to prepare load_deleted: {}", e));
+            return items;
+        }
+    };
+    let rows = match stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, String>(3)?,
+        ))
+    }) {
+        Ok(r) => r,
+        Err(e) => {
+            crate::app_log(&format!("storage: failed to query deleted: {}", e));
+            return items;
+        }
+    };
+    for row in rows.flatten() {
+        let (id, original_ts, deleted_at, payload_json) = row;
+        match serde_json::from_str::<crate::clipboard::ClipboardPayload>(&payload_json) {
+            Ok(payload) => items.push(crate::clipboard::DeletedItem {
+                id,
+                original_timestamp: original_ts as u64,
+                deleted_at: deleted_at as u64,
+                payload,
+            }),
+            Err(e) => crate::app_log(&format!("storage: skipping corrupt deleted item {}: {}", id, e)),
+        }
+    }
+    items
+}
+
+/// Persist a soft-deleted entry.
+pub fn insert_deleted(conn: &Connection, item: &crate::clipboard::DeletedItem) -> Result<(), String> {
+    let payload_json = serde_json::to_string(&item.payload)
+        .map_err(|e| format!("failed to serialize payload: {}", e))?;
+    conn.execute(
+        "INSERT OR REPLACE INTO deleted_items (id, original_ts, deleted_at, payload) VALUES (?1, ?2, ?3, ?4)",
+        params![item.id, item.original_timestamp as i64, item.deleted_at as i64, payload_json],
+    )
+    .map_err(|e| format!("failed to insert deleted item: {}", e))?;
+    Ok(())
+}
+
+/// Remove a soft-deleted entry (used by Undo / permanent delete).
+pub fn delete_deleted(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM deleted_items WHERE id = ?1", params![id])
+        .map_err(|e| format!("failed to delete deleted item: {}", e))?;
+    Ok(())
+}
+
+/// Purge deleted entries whose TTL has elapsed.
+pub fn purge_deleted_before(conn: &Connection, before_ms: u64) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM deleted_items WHERE deleted_at < ?1",
+        params![before_ms as i64],
+    )
+    .map_err(|e| format!("failed to purge deleted items: {}", e))?;
     Ok(())
 }
 

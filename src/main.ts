@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ClipboardItem } from "./types";
+import type { ClipboardItem, DeletedItem } from "./types";
 import {
   initPreview,
   previewSelectionChanged,
@@ -14,8 +14,10 @@ import {
 
 let history: ClipboardItem[] = [];
 let filteredHistory: ClipboardItem[] = [];
+let deletedItems: DeletedItem[] = [];
+let currentFilter: "all" | "text" | "image" | "file" | "deleted" = "all";
+const countDeleted = document.getElementById("count-deleted") as HTMLSpanElement;
 let selectedIndex = 0;
-let currentFilter: "all" | "text" | "image" | "file" = "all";
 let searchQuery = "";
 let isPinned = false;
 const isPreviewWindow = getCurrentWindow().label === "preview";
@@ -51,6 +53,14 @@ function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString();
 }
 
+function formatTTL(deletedAt: number): string {
+  const remaining = Math.max(0, Math.floor((deletedAt - Date.now()) / 1000));
+  if (remaining < 60) return `${remaining}s left`;
+  const min = Math.floor(remaining / 60);
+  const sec = remaining % 60;
+  return `${min}m ${sec}s left`;
+}
+
 function updateCounts() {
   const total = history.length;
   const text = history.filter((i) => i.type === "text").length;
@@ -61,9 +71,51 @@ function updateCounts() {
   if (countText) countText.textContent = text.toString();
   if (countImage) countImage.textContent = img.toString();
   if (countFile) countFile.textContent = file.toString();
+  if (countDeleted) countDeleted.textContent = deletedItems.length.toString();
 }
 
 function filterAndRender() {
+  if (currentFilter === "deleted") {
+    console.log("Filtering deleted, items:", JSON.stringify(deletedItems));
+    const query = searchQuery.trim().toLowerCase();
+    let items: any[] = [...deletedItems];
+
+    if (query) {
+      items = items.filter((item: any) => {
+        let payload = item.payload;
+        if (payload === undefined) {
+          if (item.text !== undefined) payload = { text: item.text, preview: item.preview };
+          else if (item.data_url !== undefined) payload = { data_url: item.data_url };
+          else if (item.paths !== undefined) payload = { paths: item.paths, preview: item.preview };
+        }
+        const type = item.type;
+        if (type === "text") {
+          const text = payload?.text || payload?.preview || "";
+          return text.toLowerCase().includes(query);
+        } else if (type === "file") {
+          return (
+            payload?.preview?.toLowerCase().includes(query) ||
+            payload?.paths?.some((p: string) => p.toLowerCase().includes(query))
+          );
+        } else if (type === "image") {
+          return "image".includes(query);
+        }
+        return true;
+      });
+    }
+
+    filteredHistory = items.sort((a: any, b: any) => ((b.deleted_at || 0) - (a.deleted_at || 0))) as any;
+
+    if (selectedIndex >= filteredHistory.length) {
+      selectedIndex = Math.max(0, filteredHistory.length - 1);
+    }
+
+    renderList();
+    updateClearButtonState();
+    previewRefresh();
+    return;
+  }
+
   const query = searchQuery.trim().toLowerCase();
 
   filteredHistory = history.filter((item) => {
@@ -86,11 +138,11 @@ function filterAndRender() {
   });
 
   // Sort: pinned items first, then by timestamp (newest first)
-  filteredHistory.sort((a, b) => {
+  filteredHistory.sort((a: any, b: any) => {
     if ((a.pinned ? 1 : 0) !== (b.pinned ? 1 : 0)) {
       return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
     }
-    return b.timestamp - a.timestamp;
+    return ((b.timestamp || 0) - (a.timestamp || 0));
   });
 
   if (selectedIndex >= filteredHistory.length) {
@@ -103,12 +155,16 @@ function filterAndRender() {
 }
 
 function renderList() {
+  console.log("Rendering list, currentFilter:", currentFilter, "filteredHistory length:", filteredHistory.length);
   if (filteredHistory.length === 0) {
     historyList.innerHTML = "";
     emptyState.style.display = "flex";
     if (searchQuery) {
       emptyTitle.textContent = "No matches found";
       emptyDesc.textContent = `No items found matching "${searchQuery}"`;
+    } else if (currentFilter === "deleted") {
+      emptyTitle.textContent = "No deleted items";
+      emptyDesc.textContent = "Items you delete will appear here temporarily until they expire.";
     } else {
       emptyTitle.textContent = emptyTitleDefault;
       emptyDesc.innerHTML = emptyDescDefault;
@@ -119,10 +175,26 @@ function renderList() {
   emptyState.style.display = "none";
   historyList.innerHTML = "";
 
-  filteredHistory.forEach((item, index) => {
+  filteredHistory.forEach((item: any, index) => {
+    try {
+    const actualItem = item;
+    // Handle flattened structure from backend - DeletedItem has type at top level
+    const type = actualItem.type;
+    let payload: any = {};
+    if (actualItem.payload !== undefined) {
+      payload = actualItem.payload;
+    } else {
+      if (type === "text") {
+        payload = { text: actualItem.text, preview: actualItem.preview, char_count: actualItem.char_count, line_count: actualItem.line_count };
+      } else if (type === "image") {
+        payload = { data_url: actualItem.data_url, thumbnail: actualItem.thumbnail, width: actualItem.width, height: actualItem.height, byte_size: actualItem.byte_size };
+      } else if (type === "file") {
+        payload = { paths: actualItem.paths, count: actualItem.count, preview: actualItem.preview };
+      }
+    }
     const card = document.createElement("div");
-    card.className = `history-item ${index === selectedIndex ? "selected" : ""} ${item.pinned ? "pinned" : ""}`;
-    card.setAttribute("data-id", item.id);
+    card.className = `history-item ${index === selectedIndex ? "selected" : ""} ${actualItem.pinned ? "pinned" : ""}`;
+    card.setAttribute("data-id", actualItem.id);
 
     // Meta row
     const headerRow = document.createElement("div");
@@ -132,14 +204,18 @@ function renderList() {
     metaLeft.className = "item-meta-left";
 
     const badge = document.createElement("span");
-    badge.className = `item-badge badge-${item.type}`;
-    badge.textContent = item.type;
+    badge.className = `item-badge badge-${type}`;
+    badge.textContent = type;
 
     const time = document.createElement("span");
     time.className = "item-time";
-    time.textContent = formatTime(item.timestamp);
+    if (currentFilter === "deleted") {
+      time.textContent = formatTTL(actualItem.deleted_at || Date.now() + 60000);
+    } else {
+      time.textContent = formatTime(actualItem.timestamp);
+    }
 
-    if (item.pinned) {
+    if (actualItem.pinned) {
       const pinBadge = document.createElement("span");
       pinBadge.className = "item-pin-badge";
       pinBadge.textContent = "📌";
@@ -150,86 +226,119 @@ function renderList() {
     const details = document.createElement("span");
     details.className = "item-details";
 
-    if (item.type === "text") {
-      details.textContent = `${item.payload.char_count} chars • ${item.payload.line_count} line${item.payload.line_count > 1 ? "s" : ""}`;
-    } else if (item.type === "image") {
-      const kb = Math.round(item.payload.byte_size / 1024);
-      details.textContent = `${item.payload.width}×${item.payload.height}px • ${kb} KB`;
-    } else if (item.type === "file") {
-      details.textContent = `${item.payload.count} file${item.payload.count > 1 ? "s" : ""}`;
+    if (type === "text") {
+      details.textContent = `${payload.char_count} chars • ${payload.line_count} line${payload.line_count > 1 ? "s" : ""}`;
+    } else if (type === "image") {
+      const kb = Math.round(payload.byte_size / 1024);
+      details.textContent = `${payload.width}×${payload.height}px • ${kb} KB`;
+    } else if (type === "file") {
+      details.textContent = `${payload.count} file${payload.count > 1 ? "s" : ""}`;
     }
 
     metaLeft.appendChild(badge);
     metaLeft.appendChild(time);
-    metaLeft.appendChild(details);
+    if (type === "text" || type === "image" || type === "file") {
+      metaLeft.appendChild(details);
+    }
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    // Pin/Unpin button
-    const pinBtnItem = document.createElement("button");
-    pinBtnItem.className = "item-action-btn btn-pin";
-    pinBtnItem.title = item.pinned ? "Unpin (unlock)" : "Pin (lock)";
-    pinBtnItem.setAttribute("aria-label", item.pinned ? "Unpin" : "Pin");
-    pinBtnItem.innerHTML = item.pinned ? "📌" : "📍";
-    pinBtnItem.onclick = (e) => {
-      e.stopPropagation();
-      togglePin(item.id);
-    };
-
-    // Delete button (disabled for pinned items)
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "item-action-btn btn-delete";
-    if (item.pinned) {
-      deleteBtn.disabled = true;
-      deleteBtn.title = "Unpin to delete";
-      deleteBtn.setAttribute("aria-label", "Pinned - unpin to delete");
+    if (currentFilter === "deleted") {
+      // Undo button
+      const undoBtn = document.createElement("button");
+      undoBtn.className = "item-action-btn btn-undo";
+      undoBtn.title = "Undo - restore to history";
+      undoBtn.setAttribute("aria-label", "Undo restore");
+      undoBtn.innerHTML = "↶";
+      undoBtn.onclick = (e) => {
+        e.stopPropagation();
+        restoreFromDeleted(actualItem.id);
+      };
+      // Permanent delete button
+      const permDeleteBtn = document.createElement("button");
+      permDeleteBtn.className = "item-action-btn btn-delete";
+      permDeleteBtn.title = "Delete permanently";
+      permDeleteBtn.setAttribute("aria-label", "Delete permanently");
+      permDeleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2.5 4.5h11" />
+        <path d="M6 4.5V3.25h4V4.5" />
+        <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
+        <path d="M6.6 7.25v4M9.4 7.25v4" />
+      </svg>`;
+      permDeleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        deletePermanentlyFromDeleted(actualItem.id);
+      };
+      actions.appendChild(undoBtn);
+      actions.appendChild(permDeleteBtn);
     } else {
-      deleteBtn.title = "Delete from history";
-      deleteBtn.setAttribute("aria-label", "Delete from history");
-    }
-    deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M2.5 4.5h11" />
-      <path d="M6 4.5V3.25h4V4.5" />
-      <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
-      <path d="M6.6 7.25v4M9.4 7.25v4" />
-    </svg>`;
-    deleteBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (item.pinned) return;
-      deleteItem(item.id);
-    };
+      // Pin/Unpin button
+      const pinBtnItem = document.createElement("button");
+      pinBtnItem.className = "item-action-btn btn-pin";
+      pinBtnItem.title = (item as any).pinned ? "Unpin (unlock)" : "Pin (lock)";
+      pinBtnItem.setAttribute("aria-label", (item as any).pinned ? "Unpin" : "Pin");
+      pinBtnItem.innerHTML = (item as any).pinned ? "📌" : "📍";
+      pinBtnItem.onclick = (e) => {
+        e.stopPropagation();
+        togglePin(item.id);
+      };
 
-    actions.appendChild(pinBtnItem);
-    actions.appendChild(deleteBtn);
+      // Delete button (disabled for pinned items)
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "item-action-btn btn-delete";
+      if ((item as any).pinned) {
+        deleteBtn.disabled = true;
+        deleteBtn.title = "Unpin to delete";
+        deleteBtn.setAttribute("aria-label", "Pinned - unpin to delete");
+      } else {
+        deleteBtn.title = "Delete from history";
+        deleteBtn.setAttribute("aria-label", "Delete from history");
+      }
+      deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2.5 4.5h11" />
+        <path d="M6 4.5V3.25h4V4.5" />
+        <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
+        <path d="M6.6 7.25v4M9.4 7.25v4" />
+      </svg>`;
+      deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        if ((item as any).pinned) return;
+        deleteItem(item.id);
+      };
+
+      actions.appendChild(pinBtnItem);
+      actions.appendChild(deleteBtn);
+    }
 
     headerRow.appendChild(metaLeft);
     headerRow.appendChild(actions);
     card.appendChild(headerRow);
 
     // Content body
-    if (item.type === "text") {
+    if (type === "text") {
       const textPreview = document.createElement("div");
       textPreview.className = "item-content-text";
-      textPreview.textContent = item.payload.preview || item.payload.text;
+      textPreview.textContent = payload.preview || payload.text || "";
       card.appendChild(textPreview);
-    } else if (item.type === "image") {
+    } else if (type === "image") {
       const imgContainer = document.createElement("div");
       imgContainer.className = "item-content-image";
       const img = document.createElement("img");
       // Prefer the pre-rendered thumbnail; full data_url is the fallback
       // (and what restore uses — that path stays Rust-side).
-      img.src = item.payload.thumbnail || item.payload.data_url;
+      img.src = payload.thumbnail || payload.data_url || "";
       img.alt = "Clipboard image preview";
       img.loading = "lazy";
       imgContainer.appendChild(img);
       card.appendChild(imgContainer);
-    } else if (item.type === "file") {
+    } else if (type === "file") {
       const fileContainer = document.createElement("div");
       fileContainer.className = "item-content-file";
 
-      item.payload.paths.slice(0, 3).forEach((p) => {
+      (payload.paths || []).slice(0, 3).forEach((p: string) => {
         const fileRow = document.createElement("div");
         fileRow.className = "file-row";
         const icon = document.createElement("span");
@@ -243,17 +352,20 @@ function renderList() {
         fileContainer.appendChild(fileRow);
       });
 
-      if (item.payload.paths.length > 3) {
+      if ((payload.paths || []).length > 3) {
         const moreSpan = document.createElement("span");
         moreSpan.className = "file-path";
-        moreSpan.textContent = `...and ${item.payload.paths.length - 3} more files`;
+        moreSpan.textContent = `...and ${(payload.paths || []).length - 3} more files`;
         fileContainer.appendChild(moreSpan);
       }
       card.appendChild(fileContainer);
     }
 
     card.onclick = () => {
-      selectItem(item.id);
+      if (currentFilter === "deleted") {
+        return;
+      }
+      selectItem(actualItem.id);
     };
 
     // Hover is one of the two traversals of the same flow: it moves the
@@ -262,10 +374,13 @@ function renderList() {
     // a parked cursor), only a pointer that actually moved re-engages hover.
     card.addEventListener("mouseenter", (e) => {
       if (hoverResizeGuard) return;
-      hoverCard(item.id, e.clientX, e.clientY);
+      hoverCard(actualItem.id, e.clientX, e.clientY);
     });
 
     historyList.appendChild(card);
+    } catch (e) {
+      console.error("Error rendering item:", e, item);
+    }
   });
 
   // Jump instantly: a smooth animation restarts on every arrow key (and
@@ -302,12 +417,49 @@ async function deleteItem(id: string) {
       console.warn("Cannot delete pinned item");
       return;
     }
-    await invoke("delete_item", { id });
+    await invoke("delete_item", { id, ttlSeconds: 60 });
     history = history.filter((i) => i.id !== id);
+    await loadDeleted();
     updateCounts();
     filterAndRender();
   } catch (err) {
     console.error("Failed to delete item:", err);
+  }
+}
+
+async function restoreFromDeleted(id: string) {
+  try {
+    const restored = await invoke<ClipboardItem>("restore_from_deleted", { id });
+    deletedItems = deletedItems.filter((i) => i.id !== id);
+    // Add to history
+    history = [restored, ...history.filter((i) => i.id !== restored.id)];
+    updateCounts();
+    filterAndRender();
+  } catch (err) {
+    console.error("Failed to restore from deleted:", err);
+  }
+}
+
+async function deletePermanentlyFromDeleted(id: string) {
+  try {
+    await invoke("delete_permanently_from_deleted", { id });
+    deletedItems = deletedItems.filter((i) => i.id !== id);
+    updateCounts();
+    filterAndRender();
+  } catch (err) {
+    console.error("Failed to permanently delete:", err);
+  }
+}
+
+async function loadDeleted() {
+  try {
+    const res = await invoke<any[]>("get_deleted");
+    console.log("Loaded deleted items raw:", res);
+    deletedItems = res;
+    console.log("Loaded deleted items:", deletedItems.length, deletedItems);
+    updateCounts();
+  } catch (err) {
+    console.error("Failed to load deleted items:", err);
   }
 }
 
@@ -327,12 +479,26 @@ async function togglePin(id: string) {
 async function clearView() {
   // Clear only what the user is currently looking at (active tab + search),
   // and never pinned entries — those must be unlocked first.
-  const ids = filteredHistory.filter((i) => !i.pinned).map((i) => i.id);
+  if (currentFilter === "deleted") {
+    try {
+      for (const item of filteredHistory as any[]) {
+        await invoke("delete_permanently_from_deleted", { id: item.id });
+      }
+      await loadDeleted();
+      updateCounts();
+      filterAndRender();
+    } catch (err) {
+      console.error("Failed to clear deleted items:", err);
+    }
+    return;
+  }
+  const ids = (filteredHistory as any[]).filter((i: any) => !i.pinned).map((i: any) => i.id);
   if (ids.length === 0) return;
   try {
-    const removed = await invoke<string[]>("clear_history", { ids });
+    const removed = await invoke<string[]>("clear_history", { ids, ttlSeconds: 60 });
     const gone = new Set(removed);
     history = history.filter((i) => !gone.has(i.id));
+    await loadDeleted();
     updateCounts();
     filterAndRender();
   } catch (err) {
@@ -342,7 +508,13 @@ async function clearView() {
 
 /** Keep the trash button's tooltip honest about its scope. */
 function updateClearButtonState() {
-  const clearable = filteredHistory.filter((i) => !i.pinned).length;
+  if (currentFilter === "deleted") {
+    const clearable = filteredHistory.length;
+    clearBtn.disabled = clearable === 0;
+    clearBtn.title = clearable === 0 ? "Nothing to delete permanently" : "Delete permanently from Deleted tab";
+    return;
+  }
+  const clearable = (filteredHistory as any[]).filter((i: any) => !i.pinned).length;
   const scope = searchQuery.trim()
     ? "matching items"
     : currentFilter === "all"
@@ -352,12 +524,13 @@ function updateClearButtonState() {
   clearBtn.title =
     clearable === 0
       ? "Nothing to clear here (pinned entries are kept)"
-      : `Clear ${scope} in this view (pinned entries are kept)`;
+      : `Move ${scope} to Deleted (pinned entries are kept)`;
 }
 
 async function fetchInitialHistory() {
   try {
     history = await invoke<ClipboardItem[]>("get_history");
+    await loadDeleted();
     updateCounts();
     filterAndRender();
   } catch (err) {
@@ -586,11 +759,14 @@ searchClearBtn.addEventListener("click", () => {
 
 // Filter Tabs
 filterTabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
+  tab.addEventListener("click", async () => {
     filterTabs.forEach((t) => t.classList.remove("active"));
     tab.classList.add("active");
-    currentFilter = tab.getAttribute("data-filter") as "all" | "text" | "image" | "file";
+    currentFilter = tab.getAttribute("data-filter") as "all" | "text" | "image" | "file" | "deleted";
     selectedIndex = 0;
+    if (currentFilter === "deleted") {
+      await loadDeleted();
+    }
     filterAndRender();
     searchInput.focus();
   });
@@ -684,6 +860,8 @@ getCurrentWindow()
 async function setupListener() {
   await listen<ClipboardItem>("clipboard-updated", (event) => {
     const newItem = event.payload;
+    // If item was in deleted, remove it from deleted
+    deletedItems = deletedItems.filter((i) => i.id !== newItem.id);
     // Prepend new item
     history = [newItem, ...history.filter((i) => i.id !== newItem.id)];
     if (history.length > 100) history = history.slice(0, 100);
@@ -693,6 +871,17 @@ async function setupListener() {
   // Each window session starts mouse-ready: keyboard takeover ends on hide.
   await listen("window-hidden", () => releaseKeyboard());
 }
+
+// Periodically refresh deleted items and purge expired
+setInterval(async () => {
+  try {
+    await invoke("purge_expired_deleted");
+    await loadDeleted();
+    filterAndRender();
+  } catch (err) {
+    // ignore
+  }
+}, 5000);
 
 // Initialization
 window.addEventListener("DOMContentLoaded", () => {

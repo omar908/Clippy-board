@@ -46,11 +46,26 @@ pub struct ClipboardItem {
     pub payload: ClipboardPayload,
 }
 
+/// A soft-deleted clipboard entry. `original_timestamp` keeps the item's
+/// place in history so an Undo can put it back exactly where it was;
+/// `deleted_at` drives the TTL after which the entry is permanently purged.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeletedItem {
+    pub id: String,
+    pub original_timestamp: u64,
+    pub deleted_at: u64,
+    #[serde(flatten)]
+    pub payload: ClipboardPayload,
+}
+
+#[derive(Clone)]
 pub struct ClipboardState {
     pub history: Arc<Mutex<Vec<ClipboardItem>>>,
     /// SQLite connection for persistent history (None = storage unavailable,
     /// the app degrades to in-memory-only behavior).
     pub db: Arc<Mutex<Option<rusqlite::Connection>>>,
+    /// Soft-deleted entries waiting out their TTL (temp delete / trash).
+    pub deleted: Arc<Mutex<Vec<DeletedItem>>>,
 }
 
 impl ClipboardState {
@@ -58,6 +73,7 @@ impl ClipboardState {
         Self {
             history: Arc::new(Mutex::new(Vec::new())),
             db: Arc::new(Mutex::new(None)),
+            deleted: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }

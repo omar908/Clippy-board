@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-use clipboard::{ClipboardItem, ClipboardState};
+use clipboard::{ClipboardItem, ClipboardState, DeletedItem};
 
 /// User-facing product name. Window titles, the tray menu/tooltip, and logs all
 /// derive from this so a rename never leaves one surface behind.
@@ -57,21 +57,40 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
 }
 
 #[tauri::command]
-fn delete_item(state: State<ClipboardState>, id: String) -> Result<(), String> {
+fn delete_item(state: State<ClipboardState>, id: String, ttl_seconds: Option<u64>) -> Result<(), String> {
+    let ttl = ttl_seconds.unwrap_or(60).clamp(60, 600);
+    let ttl_ms = ttl * 1000;
+    let now = now_ms();
     let mut history = state.history.lock().unwrap();
     // Don't delete pinned items
-    if let Some(item) = history.iter().find(|i| i.id == id) {
+    let item_to_delete = history.iter().find(|i| i.id == id).cloned();
+    if let Some(ref item) = item_to_delete {
         if item.pinned {
             return Err("Cannot delete pinned item".to_string());
         }
     }
-    history.retain(|i| i.id != id);
-    drop(history);
-    let db = state.db.lock().unwrap();
-    if let Some(conn) = db.as_ref() {
-        storage::delete(conn, &id)?;
+    if let Some(item) = item_to_delete {
+        history.retain(|i| i.id != id);
+        drop(history);
+        // Move to deleted store
+        let mut deleted = state.deleted.lock().unwrap();
+        let d = DeletedItem {
+            id: item.id.clone(),
+            original_timestamp: item.timestamp,
+            deleted_at: now + ttl_ms,
+            payload: item.payload.clone(),
+        };
+        deleted.insert(0, d.clone());
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            storage::insert_deleted(conn, &d).ok();
+            storage::delete(conn, &id).ok();
+        }
+        Ok(())
+    } else {
+        drop(history);
+        Err("Item not found".to_string())
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -95,31 +114,53 @@ fn toggle_pin(state: State<ClipboardState>, id: String, pinned: bool) -> Result<
 fn clear_history(
     state: State<ClipboardState>,
     ids: Option<Vec<String>>,
+    ttl_seconds: Option<u64>,
 ) -> Result<Vec<String>, String> {
+    let ttl = ttl_seconds.unwrap_or(60).clamp(60, 600);
+    let ttl_ms = ttl * 1000;
+    let now = now_ms();
     let mut history = state.history.lock().unwrap();
     // Pinned entries are never cleared. When `ids` is given, only those items
     // are considered (the frontend passes whatever is in the current view);
     // None falls back to "all unpinned items".
-    let removed: Vec<String> = history
+    let to_soft_delete: Vec<ClipboardItem> = history
         .iter()
         .filter(|item| !item.pinned)
         .filter(|item| match &ids {
             Some(ids) => ids.contains(&item.id),
             None => true,
         })
-        .map(|item| item.id.clone())
+        .cloned()
         .collect();
 
-    history.retain(|item| !removed.contains(&item.id));
+    let removed_ids: Vec<String> = to_soft_delete.iter().map(|i| i.id.clone()).collect();
+    history.retain(|item| !removed_ids.contains(&item.id));
     drop(history);
+
+    // Move to deleted store
+    let mut deleted = state.deleted.lock().unwrap();
+    for item in &to_soft_delete {
+        let d = DeletedItem {
+            id: item.id.clone(),
+            original_timestamp: item.timestamp,
+            deleted_at: now + ttl_ms,
+            payload: item.payload.clone(),
+        };
+        deleted.insert(0, d.clone());
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            storage::insert_deleted(conn, &d).ok();
+        }
+    }
+    drop(deleted);
 
     let db = state.db.lock().unwrap();
     if let Some(conn) = db.as_ref() {
-        for id in &removed {
-            storage::delete(conn, id)?;
+        for id in &removed_ids {
+            storage::delete(conn, id).ok();
         }
     }
-    Ok(removed)
+    Ok(removed_ids)
 }
 
 /// Hide the main window and notify the frontend.
@@ -253,6 +294,80 @@ fn preview_set_size(app: AppHandle, width: i32, height: i32) -> Result<(), Strin
 /// swallow events, so the preview can't tell "drag still in progress" from
 /// "pointer left the window"; Rust reads GetAsyncKeyState directly (same source
 /// as defer_hide_until_mouse_up) so the preview never grace-closes mid-drag.
+#[tauri::command]
+fn get_deleted(state: State<ClipboardState>) -> Vec<DeletedItem> {
+    let now = now_ms();
+    let mut deleted = state.deleted.lock().unwrap();
+    // Filter out expired
+    deleted.retain(|i| i.deleted_at > now);
+    deleted.clone()
+}
+
+#[tauri::command]
+fn restore_from_deleted(state: State<ClipboardState>, id: String) -> Result<ClipboardItem, String> {
+    let mut deleted = state.deleted.lock().unwrap();
+    if let Some(pos) = deleted.iter().position(|i| i.id == id) {
+        let item = deleted.remove(pos);
+        drop(deleted);
+        // Create history item
+        let history_item = ClipboardItem {
+            id: item.id.clone(),
+            timestamp: item.original_timestamp,
+            pinned: false,
+            payload: item.payload,
+        };
+        // Insert back into history at original position (sorted by timestamp)
+        let mut history = state.history.lock().unwrap();
+        let mut inserted = false;
+        for (idx, existing) in history.iter().enumerate() {
+            if existing.timestamp < history_item.timestamp {
+                history.insert(idx, history_item.clone());
+                inserted = true;
+                break;
+            }
+        }
+        if !inserted {
+            history.push(history_item.clone());
+        }
+        drop(history);
+        // Update DB
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            storage::insert(conn, &history_item).ok();
+            storage::delete_deleted(conn, &id).ok();
+        }
+        Ok(history_item)
+    } else {
+        drop(deleted);
+        Err("Item not found in deleted".to_string())
+    }
+}
+
+#[tauri::command]
+fn delete_permanently_from_deleted(state: State<ClipboardState>, id: String) -> Result<(), String> {
+    let mut deleted = state.deleted.lock().unwrap();
+    deleted.retain(|i| i.id != id);
+    drop(deleted);
+    let db = state.db.lock().unwrap();
+    if let Some(conn) = db.as_ref() {
+        storage::delete_deleted(conn, &id)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn purge_expired_deleted(state: State<ClipboardState>) -> Result<(), String> {
+    let now = now_ms();
+    let mut deleted = state.deleted.lock().unwrap();
+    deleted.retain(|i| i.deleted_at > now);
+    drop(deleted);
+    let db = state.db.lock().unwrap();
+    if let Some(conn) = db.as_ref() {
+        storage::purge_deleted_before(conn, now)?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn is_pointer_held() -> bool {
     mouse_left_button_down()
@@ -438,6 +553,7 @@ pub fn run() {
     let state = ClipboardState::new();
     let history_arc = Arc::clone(&state.history);
     let db_arc = Arc::clone(&state.db);
+    let deleted_arc_setup = Arc::clone(&state.deleted);
 
     let shortcut: Shortcut = "Ctrl+Shift+Space".parse().expect("failed to parse shortcut");
     let shortcut_clone = shortcut.clone();
@@ -454,7 +570,7 @@ pub fn run() {
                 })
                 .build(),
         )
-        .manage(state)
+        .manage(state.clone())
         .setup(move |app| {
             app_log("Setup hook entered");
 
@@ -475,6 +591,19 @@ pub fn run() {
                                 items.len()
                             ));
                             *history_arc.lock().unwrap() = items;
+                            // Also load deleted items
+                            let deleted_items = storage::load_deleted(&conn);
+                            let state_app = app.state::<ClipboardState>();
+                            let deleted_arc = Arc::clone(&state_app.deleted);
+                            *deleted_arc.lock().unwrap() = deleted_items;
+                            // Purge expired deleted items on startup
+                            let now = now_ms();
+                            storage::purge_deleted_before(&conn, now).ok();
+                            // Also clean in-memory after purge
+                            {
+                                let mut deleted_lock = state_app.deleted.lock().unwrap();
+                                deleted_lock.retain(|i| i.deleted_at > now);
+                            }
                             *db_arc.lock().unwrap() = Some(conn);
                         }
                         Err(e) => {
@@ -669,6 +798,10 @@ pub fn run() {
             delete_item,
             toggle_pin,
             clear_history,
+            get_deleted,
+            restore_from_deleted,
+            delete_permanently_from_deleted,
+            purge_expired_deleted,
             hide_window,
             show_window,
             set_pinned,
