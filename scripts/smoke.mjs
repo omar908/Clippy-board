@@ -238,9 +238,13 @@ async function main() {
   await main.conn.evaluate(`(() => {
     const tabs = [...document.querySelectorAll('.filter-tab')];
     tabs.forEach(t => t.classList.remove('active'));
-    tabs.find(t => t.dataset.filter === 'all')?.classList.add('active');
+    const allTab = tabs.find(t => t.dataset.filter === 'all');
+    if (allTab) {
+      allTab.classList.add('active');
+      allTab.click();
+    }
   })()`);
-  await sleep(300);
+  await sleep(500);
 
   // Test Deleted tab exists
   const deletedTabState = JSON.parse(
@@ -266,10 +270,18 @@ async function main() {
   });
   await sleep(100);
   await main.conn.evaluate(`document.body.focus()`);
-  await sendKey("Home");
-  await sendKey("PageDown");
-  await sendKey("End");
+  await main.conn.evaluate(`(() => {
+    const items = [...document.querySelectorAll('.history-item')];
+    items.forEach(i => i.classList.remove('selected'));
+    if (items[0]) items[0].classList.add('selected');
+  })()`);
   await sleep(200);
+  await sendKey("Home");
+  await sleep(200);
+  await sendKey("PageDown");
+  await sleep(200);
+  await sendKey("End");
+  await sleep(300);
   const navState = JSON.parse(
     await main.conn.evaluate(`JSON.stringify((() => {
       const sel = document.querySelector('.history-item.selected');
@@ -309,8 +321,40 @@ async function main() {
     await sleep(150);
   };
   await move(60, 30);
-  await move(cardHover.x, cardHover.y);
-  await move(cardHover.x + 6, cardHover.y + 4);
+  await sleep(100);
+  // Ensure we're on 'all' tab and trigger hover on smoke-text-long
+  await main.conn.evaluate(`(() => {
+    const tabs = [...document.querySelectorAll('.filter-tab')];
+    tabs.forEach(t => t.classList.remove('active'));
+    const allTab = tabs.find(t => t.dataset.filter === 'all');
+    if (allTab) {
+      allTab.classList.add('active');
+      allTab.click();
+    }
+  })()`);
+  await sleep(400);
+  const cardHover2 = JSON.parse(
+    await main.conn.evaluate(`JSON.stringify((() => {
+      const el =
+        document.querySelector('.history-item[data-id="smoke-text-long"]') ||
+        document.querySelector('.history-item');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        id: el.dataset.id,
+        text: el.innerText.slice(0, 60),
+      };
+    })())`),
+  );
+  if (cardHover2) {
+    await move(cardHover2.x, cardHover2.y);
+    await move(cardHover2.x + 6, cardHover2.y + 4);
+  } else {
+    await move(cardHover.x, cardHover.y);
+    await move(cardHover.x + 6, cardHover.y + 4);
+  }
 
   let pstate = null;
   let dockState = null;
