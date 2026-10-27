@@ -154,6 +154,17 @@ html, body {
   color: var(--text-on-accent);
 }
 
+/* Paused state */
+body.paused .clippy-popup {
+  opacity: 0.7;
+}
+
+body.paused .app-title::after {
+  content: " (PAUSED)";
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
 /* Search & Tabs */
 .search-section {
   padding: 8px 14px 10px 14px;

@@ -20,6 +20,7 @@ const countDeleted = document.getElementById("count-deleted") as HTMLSpanElement
 let selectedIndex = 0;
 let searchQuery = "";
 let isPinned = false;
+let isPaused = false;
 const isPreviewWindow = getCurrentWindow().label === "preview";
 
 // DOM Elements
@@ -34,6 +35,7 @@ const emptyDesc = emptyState.querySelector(".empty-desc") as HTMLElement;
 const emptyTitleDefault = emptyTitle.textContent ?? "";
 const emptyDescDefault = emptyDesc.innerHTML;
 const filterTabs = document.querySelectorAll<HTMLButtonElement>(".filter-tab");
+const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
 const pinBtn = document.getElementById("pin-btn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
 const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
@@ -773,6 +775,22 @@ filterTabs.forEach((tab) => {
 });
 
 // Header action buttons
+pauseBtn.addEventListener("click", async () => {
+  isPaused = !isPaused;
+  await invoke("set_listening_paused", { paused: isPaused });
+  if (isPaused) {
+    pauseBtn.classList.add("active");
+    pauseBtn.innerHTML = "▶️";
+    pauseBtn.title = "Resume clipboard listening";
+    document.body.classList.add("paused");
+  } else {
+    pauseBtn.classList.remove("active");
+    pauseBtn.innerHTML = "⏸️";
+    pauseBtn.title = "Pause clipboard listening";
+    document.body.classList.remove("paused");
+  }
+});
+
 pinBtn.addEventListener("click", async () => {
   isPinned = !isPinned;
   await invoke("set_pinned", { pinned: isPinned });

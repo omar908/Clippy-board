@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 pub static IS_SELF_COPY: AtomicBool = AtomicBool::new(false);
+pub static IS_LISTENING_PAUSED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "payload")]

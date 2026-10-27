@@ -208,6 +208,17 @@ fn get_pinned() -> bool {
 }
 
 #[tauri::command]
+fn set_listening_paused(paused: bool) -> bool {
+    clipboard::IS_LISTENING_PAUSED.store(paused, Ordering::SeqCst);
+    paused
+}
+
+#[tauri::command]
+fn get_listening_paused() -> bool {
+    clipboard::IS_LISTENING_PAUSED.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
 fn set_interacting(interacting: bool) -> bool {
     USER_INTERACTING.store(interacting, Ordering::SeqCst);
     interacting
@@ -806,6 +817,8 @@ pub fn run() {
             show_window,
             set_pinned,
             get_pinned,
+            set_listening_paused,
+            get_listening_paused,
             set_interacting,
             is_pointer_held,
             preview_show,
