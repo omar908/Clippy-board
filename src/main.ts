@@ -854,12 +854,22 @@ headerEl.addEventListener("mousedown", (e) => {
 
 // Double-click the header toggles maximize/restore
 headerEl.addEventListener("dblclick", (e) => {
-  if ((e.target as HTMLElement).closest("button")) return;
+  const target = e.target as HTMLElement;
+  if (target.closest("button") || target.closest(".icon-btn")) return;
+  if (target.closest(".header-actions")) return;
+  e.preventDefault();
+  e.stopPropagation();
   const win = getCurrentWindow();
-  win.isMaximized().then((max) => {
-    if (max) win.unmaximize();
-    else win.maximize();
-  });
+  win
+    .isMaximized()
+    .then((max) => {
+      if (max) {
+        return win.unmaximize();
+      } else {
+        return win.maximize();
+      }
+    })
+    .catch(() => {});
 });
 
 // Window focus event
