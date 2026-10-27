@@ -578,6 +578,11 @@ pub fn start_clipboard_monitor(
                     continue;
                 }
 
+                // Don't capture while paused
+                if IS_LISTENING_PAUSED.load(Ordering::SeqCst) {
+                    continue;
+                }
+
                 // Read clipboard — full-history dedup with move-to-top
                 if let Some(payload) = read_clipboard() {
                     record_capture(&app_handle, &state, &db, payload, true);
