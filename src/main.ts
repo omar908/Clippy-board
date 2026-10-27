@@ -15,7 +15,8 @@ import {
 let history: ClipboardItem[] = [];
 let filteredHistory: ClipboardItem[] = [];
 let deletedItems: DeletedItem[] = [];
-let currentFilter: "all" | "text" | "image" | "file" | "deleted" = "all";
+let currentFilter: "all" | "pinned" | "text" | "image" | "file" | "deleted" = "all";
+const countPinned = document.getElementById("count-pinned") as HTMLSpanElement;
 const countDeleted = document.getElementById("count-deleted") as HTMLSpanElement;
 let selectedIndex = 0;
 let searchQuery = "";
@@ -65,11 +66,13 @@ function formatTTL(deletedAt: number): string {
 
 function updateCounts() {
   const total = history.length;
+  const pinned = history.filter((i: any) => i.pinned).length;
   const text = history.filter((i) => i.type === "text").length;
   const img = history.filter((i) => i.type === "image").length;
   const file = history.filter((i) => i.type === "file").length;
 
   if (countAll) countAll.textContent = total.toString();
+  if (countPinned) countPinned.textContent = pinned.toString();
   if (countText) countText.textContent = text.toString();
   if (countImage) countImage.textContent = img.toString();
   if (countFile) countFile.textContent = file.toString();
@@ -120,9 +123,13 @@ function filterAndRender() {
 
   const query = searchQuery.trim().toLowerCase();
 
-  filteredHistory = history.filter((item) => {
+  filteredHistory = history.filter((item: any) => {
+    // Check pinned filter
+    if (currentFilter === "pinned" && !item.pinned) {
+      return false;
+    }
     // Check type filter
-    if (currentFilter !== "all" && item.type !== currentFilter) {
+    if (currentFilter !== "all" && currentFilter !== "pinned" && item.type !== currentFilter) {
       return false;
     }
 
@@ -132,7 +139,7 @@ function filterAndRender() {
     if (item.type === "text") {
       return item.payload.text.toLowerCase().includes(query);
     } else if (item.type === "file") {
-      return item.payload.paths.some((p) => p.toLowerCase().includes(query));
+      return item.payload.paths.some((p: string) => p.toLowerCase().includes(query));
     } else if (item.type === "image") {
       return "image".includes(query) || `${item.payload.width}x${item.payload.height}`.includes(query);
     }
@@ -764,7 +771,7 @@ filterTabs.forEach((tab) => {
   tab.addEventListener("click", async () => {
     filterTabs.forEach((t) => t.classList.remove("active"));
     tab.classList.add("active");
-    currentFilter = tab.getAttribute("data-filter") as "all" | "text" | "image" | "file" | "deleted";
+    currentFilter = tab.getAttribute("data-filter") as "all" | "pinned" | "text" | "image" | "file" | "deleted";
     selectedIndex = 0;
     if (currentFilter === "deleted") {
       await loadDeleted();
