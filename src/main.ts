@@ -672,14 +672,36 @@ function handleListKey(key: string): void {
   } else if (key === "PageDown") {
     if (filteredHistory.length > 0) {
       takeOverForKeyboard();
-      selectedIndex = Math.min(selectedIndex + 10, filteredHistory.length - 1);
+      const container = document.getElementById("history-container") as HTMLElement | null;
+      const items = historyList.querySelectorAll<HTMLElement>(".history-item");
+      let pageSize = 10;
+      if (container && items.length > 0) {
+        const containerHeight = container.clientHeight;
+        const firstItemHeight = items[0].getBoundingClientRect().height;
+        const gap = 6;
+        if (firstItemHeight > 0) {
+          pageSize = Math.max(1, Math.floor(containerHeight / (firstItemHeight + gap)));
+        }
+      }
+      selectedIndex = Math.min(selectedIndex + pageSize, filteredHistory.length - 1);
       renderList();
       previewSelectionChanged();
     }
   } else if (key === "PageUp") {
     if (filteredHistory.length > 0) {
       takeOverForKeyboard();
-      selectedIndex = Math.max(selectedIndex - 10, 0);
+      const container = document.getElementById("history-container") as HTMLElement | null;
+      const items = historyList.querySelectorAll<HTMLElement>(".history-item");
+      let pageSize = 10;
+      if (container && items.length > 0) {
+        const containerHeight = container.clientHeight;
+        const firstItemHeight = items[0].getBoundingClientRect().height;
+        const gap = 6;
+        if (firstItemHeight > 0) {
+          pageSize = Math.max(1, Math.floor(containerHeight / (firstItemHeight + gap)));
+        }
+      }
+      selectedIndex = Math.max(selectedIndex - pageSize, 0);
       renderList();
       previewSelectionChanged();
     }
