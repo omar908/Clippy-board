@@ -635,6 +635,9 @@ function cycleFilterTab(delta: number): void {
   if (idx === -1 || tabs.length === 0) return;
   const next = (idx + delta + tabs.length) % tabs.length;
   tabs[next].click();
+  setTimeout(() => {
+    tabs[next].scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }, 10);
 }
 
 function handleListKey(key: string): void {

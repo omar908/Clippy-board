@@ -236,7 +236,25 @@ body.paused .app-title::after {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  scrollbar-color: var(--overlay-3) transparent;
   padding-bottom: 2px;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.filter-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.filter-tabs::-webkit-scrollbar-thumb {
+  background: var(--overlay-3);
+  border-radius: 3px;
+}
+
+.filter-tabs::-webkit-scrollbar-thumb:hover {
+  background: var(--overlay-4);
 }
 
 .filter-tab {
