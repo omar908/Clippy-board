@@ -40,6 +40,10 @@ const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
 const pinBtn = document.getElementById("pin-btn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
 const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
+const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement;
+const settingsPage = document.getElementById("settings-page") as HTMLDivElement;
+const settingsBackBtn = document.getElementById("settings-back-btn") as HTMLButtonElement;
+const mainContent = document.getElementById("main-content") as HTMLDivElement;
 const countAll = document.getElementById("count-all") as HTMLSpanElement;
 const countText = document.getElementById("count-text") as HTMLSpanElement;
 const countImage = document.getElementById("count-image") as HTMLSpanElement;
@@ -782,6 +786,21 @@ filterTabs.forEach((tab) => {
     filterAndRender();
     searchInput.focus();
   });
+});
+
+// Settings
+settingsBtn.addEventListener("click", () => {
+  mainContent.style.display = "none";
+  settingsPage.style.display = "flex";
+});
+
+settingsBackBtn.addEventListener("click", () => {
+  settingsPage.style.display = "none";
+  mainContent.style.display = "flex";
+  mainContent.style.flexDirection = "column";
+  mainContent.style.flex = "1";
+  mainContent.style.minHeight = "0";
+  searchInput.focus();
 });
 
 // Header action buttons
