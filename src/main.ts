@@ -916,7 +916,17 @@ async function setupListener() {
     history = [newItem, ...history.filter((i) => i.id !== newItem.id)];
     if (history.length > 100) history = history.slice(0, 100);
     updateCounts();
+    selectedIndex = 0;
     filterAndRender();
+    // Ensure we scroll to top when new item comes in (especially when pinned)
+    setTimeout(() => {
+      const activeEl = historyList.querySelector(".history-item.selected") as HTMLElement | null;
+      if (activeEl) {
+        activeEl.scrollIntoView({ block: "start", behavior: "smooth" });
+      } else if (historyList.firstElementChild) {
+        historyList.firstElementChild.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }, 50);
   });
   // Each window session starts mouse-ready: keyboard takeover ends on hide.
   await listen("window-hidden", () => releaseKeyboard());
