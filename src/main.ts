@@ -845,31 +845,43 @@ function runNativeDrag(op: () => Promise<void>): void {
 // Window dragging — data-tauri-drag-region doesn't fire for child elements
 // (spans, buttons), so explicitly start dragging from the header area.
 const headerEl = document.querySelector(".clippy-header") as HTMLElement;
+let lastClickTime = 0;
 headerEl.addEventListener("mousedown", (e) => {
   // Don't drag when interacting with the header action buttons
   if ((e.target as HTMLElement).closest("button")) return;
+  if ((e.target as HTMLElement).closest(".header-actions")) return;
+  const now = Date.now();
+  if (now - lastClickTime < 300) {
+    lastClickTime = 0;
+    return;
+  }
+  lastClickTime = now;
   e.preventDefault();
   runNativeDrag(() => getCurrentWindow().startDragging());
 });
 
 // Double-click the header toggles maximize/restore
-headerEl.addEventListener("dblclick", (e) => {
+headerEl.addEventListener("dblclick", async (e) => {
   const target = e.target as HTMLElement;
   if (target.closest("button") || target.closest(".icon-btn")) return;
   if (target.closest(".header-actions")) return;
   e.preventDefault();
   e.stopPropagation();
   const win = getCurrentWindow();
-  win
-    .isMaximized()
-    .then((max) => {
-      if (max) {
-        return win.unmaximize();
-      } else {
-        return win.maximize();
-      }
-    })
-    .catch(() => {});
+  try {
+    if (typeof (win as any).toggleMaximize === "function") {
+      await (win as any).toggleMaximize();
+      return;
+    }
+    const isMax = await win.isMaximized();
+    if (isMax) {
+      await win.unmaximize();
+    } else {
+      await win.maximize();
+    }
+  } catch (err) {
+    console.error("Failed to toggle maximize:", err);
+  }
 });
 
 // Window focus event
