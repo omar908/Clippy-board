@@ -477,7 +477,8 @@ fn record_capture(
                     item.id, item.payload
                 ));
                 history.insert(0, item.clone());
-                if history.len() > crate::storage::MAX_HISTORY {
+                let max_h = crate::storage::get_max_history();
+                if history.len() > max_h {
                     // Don't trim pinned items
                     let mut kept = Vec::new();
                     let mut unpinned = Vec::new();
@@ -488,7 +489,7 @@ fn record_capture(
                             unpinned.push(i);
                         }
                     }
-                    unpinned.truncate(crate::storage::MAX_HISTORY.saturating_sub(kept.len()));
+                    unpinned.truncate(max_h.saturating_sub(kept.len()));
                     kept.extend(unpinned);
                     *history = kept;
                 }
@@ -505,7 +506,7 @@ fn record_capture(
             if let Err(e) = crate::storage::insert(conn, &item) {
                 crate::app_log(&format!("storage: insert failed: {}", e));
             }
-            if let Err(e) = crate::storage::trim(conn, crate::storage::MAX_HISTORY) {
+            if let Err(e) = crate::storage::trim(conn, crate::storage::get_max_history()) {
                 crate::app_log(&format!("storage: trim failed: {}", e));
             }
         }

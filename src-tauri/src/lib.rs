@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub mod settings;
 pub mod storage;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -216,6 +217,17 @@ fn set_listening_paused(paused: bool) -> bool {
 #[tauri::command]
 fn get_listening_paused() -> bool {
     clipboard::IS_LISTENING_PAUSED.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> settings::AppSettings {
+    settings::load_settings(&app)
+}
+
+#[tauri::command]
+fn save_settings_cmd(app: AppHandle, settings: settings::AppSettings) -> Result<(), String> {
+    storage::set_max_history(settings.max_history);
+    settings::save_settings(&app, &settings)
 }
 
 #[tauri::command]
@@ -585,6 +597,10 @@ pub fn run() {
         .setup(move |app| {
             app_log("Setup hook entered");
 
+            // Load settings
+            let app_settings = settings::load_settings(app.handle());
+            storage::set_max_history(app_settings.max_history);
+            
             // Load history BEFORE creating the webviews. Building a window can
             // pump messages, letting the page invoke `get_history` while setup
             // is still running; opening storage afterwards made startup racy
@@ -819,6 +835,8 @@ pub fn run() {
             get_pinned,
             set_listening_paused,
             get_listening_paused,
+            get_settings,
+            save_settings_cmd,
             set_interacting,
             is_pointer_held,
             preview_show,

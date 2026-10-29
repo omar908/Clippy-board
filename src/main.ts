@@ -44,6 +44,11 @@ const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement
 const settingsPage = document.getElementById("settings-page") as HTMLDivElement;
 const settingsBackBtn = document.getElementById("settings-back-btn") as HTMLButtonElement;
 const mainContent = document.getElementById("main-content") as HTMLDivElement;
+const settingMaxHistory = document.getElementById("setting-max-history") as HTMLInputElement;
+const settingDeleteImmediate = document.getElementById("setting-delete-immediate") as HTMLInputElement;
+const shortcutPin = document.getElementById("shortcut-pin") as HTMLInputElement;
+const shortcutsReset = document.getElementById("shortcuts-reset") as HTMLButtonElement;
+const settingsSaveBtn = document.getElementById("settings-save-btn") as HTMLButtonElement;
 const countAll = document.getElementById("count-all") as HTMLSpanElement;
 const countText = document.getElementById("count-text") as HTMLSpanElement;
 const countImage = document.getElementById("count-image") as HTMLSpanElement;
@@ -789,7 +794,15 @@ filterTabs.forEach((tab) => {
 });
 
 // Settings
-settingsBtn.addEventListener("click", () => {
+settingsBtn.addEventListener("click", async () => {
+  try {
+    const settings: any = await invoke("get_settings");
+    if (settingMaxHistory) settingMaxHistory.value = settings.max_history || 100;
+    if (settingDeleteImmediate) settingDeleteImmediate.checked = !!settings.delete_immediately;
+    if (shortcutPin) shortcutPin.value = settings.shortcuts?.pin || "";
+  } catch (e) {
+    console.error("Failed to load settings:", e);
+  }
   mainContent.style.display = "none";
   settingsPage.style.display = "flex";
 });
@@ -801,6 +814,41 @@ settingsBackBtn.addEventListener("click", () => {
   mainContent.style.flex = "1";
   mainContent.style.minHeight = "0";
   searchInput.focus();
+});
+
+settingsSaveBtn.addEventListener("click", async () => {
+  try {
+    const settings = {
+      max_history: parseInt(settingMaxHistory.value) || 100,
+      delete_immediately: settingDeleteImmediate.checked,
+      shortcuts: {
+        pin: shortcutPin.value || "",
+      },
+    };
+    await invoke("save_settings_cmd", { settings });
+    alert("Settings saved");
+  } catch (e) {
+    console.error("Failed to save settings:", e);
+    alert("Failed to save settings");
+  }
+});
+
+shortcutsReset.addEventListener("click", () => {
+  if (shortcutPin) shortcutPin.value = "";
+});
+
+shortcutPin.addEventListener("keydown", (e) => {
+  e.preventDefault();
+  const parts = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.shiftKey) parts.push("Shift");
+  if (e.altKey) parts.push("Alt");
+  if (e.metaKey) parts.push("Meta");
+  const key = e.key;
+  if (key !== "Control" && key !== "Shift" && key !== "Alt" && key !== "Meta") {
+    parts.push(key === " " ? "Space" : key);
+    shortcutPin.value = parts.join("+");
+  }
 });
 
 // Header action buttons

@@ -36,40 +36,42 @@
           </div>
           <div class="settings-content">
             <div class="settings-section">
-              <div class="settings-section-title">General</div>
+              <div class="settings-section-title">History</div>
               <div class="settings-row">
                 <div class="settings-row-info">
-                  <div class="settings-row-label">Start on boot</div>
-                  <div class="settings-row-desc">Launch Clippy-board when Windows starts</div>
+                  <div class="settings-row-label">Max history items</div>
+                  <div class="settings-row-desc">Maximum number of items to keep (pinned items are always kept)</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" id="setting-autostart" />
-                  <span class="toggle-slider"></span>
-                </label>
+                <input type="number" id="setting-max-history" class="settings-input" min="1" max="10000" value="100" />
               </div>
               <div class="settings-row">
                 <div class="settings-row-info">
-                  <div class="settings-row-label">Always on top</div>
-                  <div class="settings-row-desc">Keep window above other windows</div>
+                  <div class="settings-row-label">Delete immediately when TTL is 0</div>
+                  <div class="settings-row-desc">If enabled, items deleted with TTL 0 are removed permanently</div>
                 </div>
                 <label class="toggle">
-                  <input type="checkbox" id="setting-always-on-top" checked disabled />
+                  <input type="checkbox" id="setting-delete-immediate" />
                   <span class="toggle-slider"></span>
                 </label>
               </div>
             </div>
             <div class="settings-section">
-              <div class="settings-section-title">Behavior</div>
+              <div class="settings-section-title">Shortcuts</div>
               <div class="settings-row">
                 <div class="settings-row-info">
-                  <div class="settings-row-label">Auto-hide on blur</div>
-                  <div class="settings-row-desc">Hide window when clicking outside</div>
+                  <div class="settings-row-label">Toggle window</div>
+                  <div class="settings-row-desc">Global shortcut</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" id="setting-auto-hide" checked disabled />
-                  <span class="toggle-slider"></span>
-                </label>
+                <input type="text" id="shortcut-toggle" class="settings-input" value="Ctrl+Shift+Space" readonly />
               </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Pin/Unpin current item</div>
+                  <div class="settings-row-desc">Custom shortcut (click to record)</div>
+                </div>
+                <input type="text" id="shortcut-pin" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <button id="shortcuts-reset" class="settings-btn">Reset to defaults</button>
             </div>
             <div class="settings-section">
               <div class="settings-section-title">About</div>
@@ -78,6 +80,7 @@
                 <div class="settings-about-sub">Clipboard Manager</div>
               </div>
             </div>
+            <button id="settings-save-btn" class="settings-save-btn">Save Settings</button>
           </div>
         </div>
 

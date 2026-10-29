@@ -910,6 +910,47 @@ body.preview-window .preview-panel {
   margin-top: 2px;
 }
 
+.settings-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  width: 100px;
+}
+
+.settings-btn {
+  background: var(--overlay-1);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-btn:hover {
+  background: var(--overlay-2);
+}
+
+.settings-save-btn {
+  background: var(--accent-color);
+  border: none;
+  color: var(--text-on-accent);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-top: 8px;
+}
+
+.settings-save-btn:hover {
+  opacity: 0.9;
+}
+
 /* Footer */
 .clippy-footer {
   display: flex;
