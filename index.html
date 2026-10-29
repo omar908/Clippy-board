@@ -40,19 +40,16 @@
               <div class="settings-row">
                 <div class="settings-row-info">
                   <div class="settings-row-label">Max history items</div>
-                  <div class="settings-row-desc">Maximum number of items to keep (pinned items are always kept)</div>
+                  <div class="settings-row-desc">Maximum number of items to keep (pinned items are always kept, max 10000)</div>
                 </div>
                 <input type="number" id="setting-max-history" class="settings-input" min="1" max="10000" value="100" />
               </div>
               <div class="settings-row">
                 <div class="settings-row-info">
-                  <div class="settings-row-label">Delete immediately when TTL is 0</div>
-                  <div class="settings-row-desc">If enabled, items deleted with TTL 0 are removed permanently</div>
+                  <div class="settings-row-label">Delete TTL (seconds)</div>
+                  <div class="settings-row-desc">Time before deleted items are permanently removed. Set to 0 to delete immediately</div>
                 </div>
-                <label class="toggle">
-                  <input type="checkbox" id="setting-delete-immediate" />
-                  <span class="toggle-slider"></span>
-                </label>
+                <input type="number" id="setting-delete-ttl" class="settings-input" min="0" max="86400" value="60" />
               </div>
             </div>
             <div class="settings-section">
@@ -66,10 +63,45 @@
               </div>
               <div class="settings-row">
                 <div class="settings-row-info">
-                  <div class="settings-row-label">Pin/Unpin current item</div>
-                  <div class="settings-row-desc">Custom shortcut (click to record)</div>
+                  <div class="settings-row-label">Move selection up</div>
+                  <div class="settings-row-desc">Navigate up in list</div>
                 </div>
-                <input type="text" id="shortcut-pin" class="settings-input" placeholder="Not set" readonly />
+                <input type="text" id="shortcut-move-up" class="settings-input" value="ArrowUp" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Move selection down</div>
+                  <div class="settings-row-desc">Navigate down in list</div>
+                </div>
+                <input type="text" id="shortcut-move-down" class="settings-input" value="ArrowDown" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Copy/Select item</div>
+                  <div class="settings-row-desc">Copy selected item</div>
+                </div>
+                <input type="text" id="shortcut-copy" class="settings-input" value="Enter" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Pin/Unpin selected item</div>
+                  <div class="settings-row-desc">Toggle pin on selected item</div>
+                </div>
+                <input type="text" id="shortcut-pin-item" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Delete selected item</div>
+                  <div class="settings-row-desc">Delete selected item</div>
+                </div>
+                <input type="text" id="shortcut-delete" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Pause/Resume listening</div>
+                  <div class="settings-row-desc">Toggle clipboard listening</div>
+                </div>
+                <input type="text" id="shortcut-pause" class="settings-input" placeholder="Not set" readonly />
               </div>
               <button id="shortcuts-reset" class="settings-btn">Reset to defaults</button>
             </div>

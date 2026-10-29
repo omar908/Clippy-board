@@ -9,7 +9,9 @@ pub struct AppSettings {
     #[serde(default = "default_max_history")]
     pub max_history: usize,
     #[serde(default)]
-    pub delete_immediately: bool, // if true and ttl is 0 or this flag set, delete immediately
+    pub delete_immediately: bool,
+    #[serde(default = "default_delete_ttl")]
+    pub delete_ttl_seconds: u64,
     #[serde(default)]
     pub shortcuts: std::collections::HashMap<String, String>,
 }
@@ -18,11 +20,16 @@ fn default_max_history() -> usize {
     100
 }
 
+fn default_delete_ttl() -> u64 {
+    60
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             max_history: 100,
             delete_immediately: false,
+            delete_ttl_seconds: 60,
             shortcuts: std::collections::HashMap::new(),
         }
     }

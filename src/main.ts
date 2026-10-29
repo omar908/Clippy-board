@@ -45,8 +45,10 @@ const settingsPage = document.getElementById("settings-page") as HTMLDivElement;
 const settingsBackBtn = document.getElementById("settings-back-btn") as HTMLButtonElement;
 const mainContent = document.getElementById("main-content") as HTMLDivElement;
 const settingMaxHistory = document.getElementById("setting-max-history") as HTMLInputElement;
-const settingDeleteImmediate = document.getElementById("setting-delete-immediate") as HTMLInputElement;
-const shortcutPin = document.getElementById("shortcut-pin") as HTMLInputElement;
+const settingDeleteTtl = document.getElementById("setting-delete-ttl") as HTMLInputElement;
+const shortcutPinItem = document.getElementById("shortcut-pin-item") as HTMLInputElement;
+const shortcutDelete = document.getElementById("shortcut-delete") as HTMLInputElement;
+const shortcutPause = document.getElementById("shortcut-pause") as HTMLInputElement;
 const shortcutsReset = document.getElementById("shortcuts-reset") as HTMLButtonElement;
 const settingsSaveBtn = document.getElementById("settings-save-btn") as HTMLButtonElement;
 const countAll = document.getElementById("count-all") as HTMLSpanElement;
@@ -798,8 +800,10 @@ settingsBtn.addEventListener("click", async () => {
   try {
     const settings: any = await invoke("get_settings");
     if (settingMaxHistory) settingMaxHistory.value = settings.max_history || 100;
-    if (settingDeleteImmediate) settingDeleteImmediate.checked = !!settings.delete_immediately;
-    if (shortcutPin) shortcutPin.value = settings.shortcuts?.pin || "";
+    if (settingDeleteTtl) settingDeleteTtl.value = settings.delete_ttl_seconds ?? 60;
+    if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "";
+    if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "";
+    if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "";
   } catch (e) {
     console.error("Failed to load settings:", e);
   }
@@ -819,10 +823,13 @@ settingsBackBtn.addEventListener("click", () => {
 settingsSaveBtn.addEventListener("click", async () => {
   try {
     const settings = {
-      max_history: parseInt(settingMaxHistory.value) || 100,
-      delete_immediately: settingDeleteImmediate.checked,
+      max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
+      delete_immediately: parseInt(settingDeleteTtl.value) === 0,
+      delete_ttl_seconds: parseInt(settingDeleteTtl.value) || 0,
       shortcuts: {
-        pin: shortcutPin.value || "",
+        pinItem: shortcutPinItem.value || "",
+        delete: shortcutDelete.value || "",
+        pause: shortcutPause.value || "",
       },
     };
     await invoke("save_settings_cmd", { settings });
@@ -834,22 +841,38 @@ settingsSaveBtn.addEventListener("click", async () => {
 });
 
 shortcutsReset.addEventListener("click", () => {
-  if (shortcutPin) shortcutPin.value = "";
+  if (shortcutPinItem) shortcutPinItem.value = "";
+  if (shortcutDelete) shortcutDelete.value = "";
+  if (shortcutPause) shortcutPause.value = "";
 });
 
-shortcutPin.addEventListener("keydown", (e) => {
-  e.preventDefault();
-  const parts = [];
-  if (e.ctrlKey) parts.push("Ctrl");
-  if (e.shiftKey) parts.push("Shift");
-  if (e.altKey) parts.push("Alt");
-  if (e.metaKey) parts.push("Meta");
-  const key = e.key;
-  if (key !== "Control" && key !== "Shift" && key !== "Alt" && key !== "Meta") {
-    parts.push(key === " " ? "Space" : key);
-    shortcutPin.value = parts.join("+");
-  }
-});
+function recordShortcut(input: HTMLInputElement) {
+  input.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const parts = [];
+    if (e.ctrlKey) parts.push("Ctrl");
+    if (e.shiftKey) parts.push("Shift");
+    if (e.altKey) parts.push("Alt");
+    if (e.metaKey) parts.push("Meta");
+    const key = e.key;
+    if (key !== "Control" && key !== "Shift" && key !== "Alt" && key !== "Meta") {
+      if (key === " ") parts.push("Space");
+      else if (key === "ArrowUp") parts.push("ArrowUp");
+      else if (key === "ArrowDown") parts.push("ArrowDown");
+      else if (key === "ArrowLeft") parts.push("ArrowLeft");
+      else if (key === "ArrowRight") parts.push("ArrowRight");
+      else if (key === "Delete") parts.push("Delete");
+      else if (key === "Backspace") parts.push("Backspace");
+      else parts.push(key.toUpperCase());
+      input.value = parts.join("+");
+    }
+  });
+}
+
+if (shortcutPinItem) recordShortcut(shortcutPinItem);
+if (shortcutDelete) recordShortcut(shortcutDelete);
+if (shortcutPause) recordShortcut(shortcutPause);
 
 // Header action buttons
 pauseBtn.addEventListener("click", async () => {
