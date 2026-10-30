@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem, DeletedItem } from "./types";
+import { ShortcutManager } from "./shortcuts";
 import {
   initPreview,
   previewSelectionChanged,
@@ -748,13 +749,25 @@ let currentSettingsCache: any = null;
   try { currentSettingsCache = await invoke("get_settings"); } catch {}
 })();
 
-window.addEventListener("keydown", (e) => {
-  const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && k === "f") {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    e.stopPropagation();
-    // Try to focus search
+const shortcutManager = new ShortcutManager({
+  isSettingsOpen: () => !!(settingsPage && settingsPage.style.display !== "none"),
+  isSettingsInputActive: () => {
+    const el = document.activeElement as HTMLElement | null;
+    return !!(el && el.classList.contains("settings-input"));
+  },
+  isSearchInputActive: () => document.activeElement === searchInput,
+  getActiveElement: () => document.activeElement as HTMLElement | null,
+});
+
+shortcutManager.register({
+  id: "search-focus",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+  },
+  action: () => {
     if (searchInput) {
       if (document.activeElement === searchInput) {
         searchInput.blur();
@@ -762,33 +775,80 @@ window.addEventListener("keydown", (e) => {
         searchInput.focus();
       }
     }
-    return false;
-  }
-  if ((e.ctrlKey || e.metaKey) && k === "p") {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    e.stopPropagation();
-    // Toggle pause
-    (async () => {
+  },
+  allowInSearchInput: true,
+  preventDefault: true,
+  stopPropagation: true,
+});
+
+shortcutManager.register({
+  id: "pause-toggle",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+  },
+  action: async () => {
+    isPaused = !isPaused;
+    try {
+      await invoke("set_listening_paused", { paused: isPaused });
+    } catch {}
+    if (isPaused) {
+      pauseBtn.classList.add("active");
+      try { pauseBtn.innerHTML = "⏸"; } catch {}
+      pauseBtn.title = "Resume clipboard listening";
+      document.body.classList.add("paused");
+    } else {
+      pauseBtn.classList.remove("active");
+      try { pauseBtn.innerHTML = "⏯"; } catch {}
+      pauseBtn.title = "Pause clipboard listening";
+      document.body.classList.remove("paused");
+    }
+  },
+  preventDefault: true,
+  stopPropagation: true,
+});
+
+shortcutManager.register({
+  id: "pin-toggle",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.pinItem || "Alt+P";
+  },
+  action: async () => {
+    const target = filteredHistory[selectedIndex];
+    if (target) {
       try {
-        isPaused = !isPaused;
-        await invoke("set_listening_paused", { paused: isPaused });
-        if (isPaused) {
-          pauseBtn.classList.add("active");
-          try { pauseBtn.innerHTML = "⏸"; } catch {}
-          pauseBtn.title = "Resume clipboard listening";
-          document.body.classList.add("paused");
-        } else {
-          pauseBtn.classList.remove("active");
-          try { pauseBtn.innerHTML = "⏯"; } catch {}
-          pauseBtn.title = "Pause clipboard listening";
-          document.body.classList.remove("paused");
-        }
+        await invoke("toggle_pin", { id: target.id, pinned: !target.pinned });
+        await fetchInitialHistory();
+        filterAndRender();
       } catch {}
-    })();
-    return false;
-  }
-}, true);
+    }
+  },
+  preventDefault: true,
+  stopPropagation: true,
+});
+
+shortcutManager.register({
+  id: "delete-item",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.delete || "Delete";
+  },
+  action: () => {
+    const target = filteredHistory[selectedIndex];
+    if (target && !target.pinned) {
+      deleteItem(target.id);
+    }
+  },
+  preventDefault: true,
+  stopPropagation: true,
+});
 
 window.addEventListener("keydown", (e) => {
   const navKey =
