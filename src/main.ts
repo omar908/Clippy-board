@@ -1100,7 +1100,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (label === "preview") return;
 
-  searchInput.focus();
   fetchInitialHistory();
   setupListener();
 });
