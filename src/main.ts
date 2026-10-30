@@ -724,7 +724,6 @@ window.addEventListener("keydown", (e) => {
       // Let settings handle it
       return;
     }
-    // Allow some navigation in settings if needed, but generally don't interfere
   }
   // Don't intercept when typing in search input
   const activeEl = document.activeElement as HTMLElement | null;
@@ -733,10 +732,13 @@ window.addEventListener("keydown", (e) => {
       // allow escape
     } else if (e.ctrlKey || e.metaKey) {
       return;
-    } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter") {
+    } else if (e.key === "Enter") {
       return;
     } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
       // Allow tab switching even when in search
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // Don't allow arrow keys in search to navigate list
+      return;
     } else {
       return;
     }
