@@ -769,6 +769,10 @@ window.addEventListener("keydown", (e) => {
       currentSettingsCache = await invoke("get_settings");
       const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
       const combo = normalizeKeyCombo(e);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (combo === searchShortcut) {
         if ((e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); }
         if (settingsPage && settingsPage.style.display !== "none") {
