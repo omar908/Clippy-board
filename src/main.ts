@@ -749,6 +749,14 @@ let currentSettingsCache: any = null;
 })();
 
 window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return false;
+  }
+}, true);
+
+window.addEventListener("keydown", (e) => {
   const navKey =
     e.key === "ArrowDown" ||
     e.key === "ArrowUp" ||
