@@ -787,6 +787,56 @@ window.addEventListener("keydown", (e) => {
         }
         return;
       }
+      const pinShortcut = currentSettingsCache?.shortcuts?.pinItem;
+      if (pinShortcut && combo === pinShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = filteredHistory[selectedIndex];
+        if (target && !target.pinned) {
+          // toggle pin via button logic
+          try {
+            await invoke("toggle_pin", { id: target.id });
+            await fetchInitialHistory();
+            filterAndRender();
+          } catch {}
+        } else if (target && target.pinned) {
+          try {
+            await invoke("unpin_item", { id: target.id });
+            await fetchInitialHistory();
+            filterAndRender();
+          } catch {}
+        }
+        return;
+      }
+      const delShortcut = currentSettingsCache?.shortcuts?.delete;
+      if (delShortcut && combo === delShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = filteredHistory[selectedIndex];
+        if (target && !target.pinned) {
+          deleteItem(target.id);
+        }
+        return;
+      }
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause;
+      if (pauseShortcut && combo === pauseShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        isPaused = !isPaused;
+        await invoke("set_listening_paused", { paused: isPaused });
+        if (isPaused) {
+          pauseBtn.classList.add("active");
+          pauseBtn.innerHTML = "⏸";
+          pauseBtn.title = "Resume clipboard listening";
+          document.body.classList.add("paused");
+        } else {
+          pauseBtn.classList.remove("active");
+          pauseBtn.innerHTML = "⏯";
+          pauseBtn.title = "Pause clipboard listening";
+          document.body.classList.remove("paused");
+        }
+        return;
+      }
     } catch {}
   })();
   // Don't intercept when typing in search input
