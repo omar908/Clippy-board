@@ -743,7 +743,10 @@ window.addEventListener("keydown", (e) => {
   const activeEl = document.activeElement as HTMLElement | null;
   if (activeEl && activeEl.id === "search-input") {
     if (e.key === "Escape") {
-      // allow escape
+      e.preventDefault();
+      e.stopPropagation();
+      searchInput.blur();
+      return;
     } else if (e.ctrlKey || e.metaKey) {
       return;
     } else if (e.key === "Enter") {
