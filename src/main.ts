@@ -1045,7 +1045,8 @@ async function setupListener() {
     deletedItems = deletedItems.filter((i) => i.id !== newItem.id);
     // Prepend new item
     history = [newItem, ...history.filter((i) => i.id !== newItem.id)];
-    if (history.length > 100) history = history.slice(0, 100);
+    const maxH = history.length;
+    if (maxH > 10000) history = history.slice(0, 10000);
     updateCounts();
     selectedIndex = 0;
     filterAndRender();
