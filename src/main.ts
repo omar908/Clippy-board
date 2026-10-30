@@ -1031,8 +1031,7 @@ window.addEventListener("focus", () => {
   if (activeEl && activeEl.classList.contains("settings-input")) {
     return;
   }
-  searchInput.focus();
-  searchInput.select();
+  // Don't auto-focus search on window focus
 });
 
 // Leaving the window (focus loss) also ends the keyboard takeover.
