@@ -771,7 +771,7 @@ window.addEventListener("keydown", (e) => {
   (async () => {
     try {
       if (!currentSettingsCache) currentSettingsCache = await invoke("get_settings");
-      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+S";
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
       const combo = normalizeKeyCombo(e);
       if (combo === searchShortcut) {
         if (settingsPage && settingsPage.style.display !== "none") {
@@ -901,7 +901,7 @@ settingsBtn.addEventListener("click", async () => {
     if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "";
     if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "";
     if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "";
-    if (shortcutSearch) shortcutSearch.value = settings.shortcuts?.search || "Ctrl+S";
+    if (shortcutSearch) shortcutSearch.value = settings.shortcuts?.search || "Ctrl+F";
   } catch (e) {
     console.error("Failed to load settings:", e);
   }
@@ -927,7 +927,7 @@ settingsSaveBtn.addEventListener("click", async () => {
         pinItem: shortcutPinItem.value || "",
         delete: shortcutDelete.value || "",
         pause: shortcutPause.value || "",
-        search: shortcutSearch.value || "Ctrl+S",
+        search: shortcutSearch.value || "Ctrl+F",
       },
     };
     await invoke("save_settings_cmd", { settings });
@@ -942,7 +942,7 @@ shortcutsReset.addEventListener("click", () => {
   if (shortcutPinItem) shortcutPinItem.value = "";
   if (shortcutDelete) shortcutDelete.value = "";
   if (shortcutPause) shortcutPause.value = "";
-  if (shortcutSearch) shortcutSearch.value = "Ctrl+S";
+  if (shortcutSearch) shortcutSearch.value = "Ctrl+F";
 });
 
 function recordShortcut(input: HTMLInputElement) {
