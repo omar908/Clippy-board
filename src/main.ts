@@ -834,6 +834,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
+    if (settingsPage && settingsPage.style.display !== "none") {
+      e.preventDefault();
+      e.stopPropagation();
+      settingsPage.style.display = "none";
+      mainContent.style.display = "flex";
+      mainContent.style.flexDirection = "column";
+      mainContent.style.flex = "1";
+      mainContent.style.minHeight = "0";
+      return;
+    }
     e.preventDefault();
     // Hide first, then restore the pre-preview geometry while invisible.
     invoke("hide_window").then(() => previewDismiss()).catch(() => {});
