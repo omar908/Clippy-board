@@ -749,7 +749,7 @@ let currentSettingsCache: any = null;
 })();
 
 window.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "f")) {
     e.preventDefault();
     e.stopImmediatePropagation();
     return false;
@@ -777,7 +777,7 @@ window.addEventListener("keydown", (e) => {
       currentSettingsCache = await invoke("get_settings");
       const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
       const combo = normalizeKeyCombo(e);
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "f")) {
         e.preventDefault();
         e.stopPropagation();
         e.returnValue = false;
