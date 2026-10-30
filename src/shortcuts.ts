@@ -60,7 +60,9 @@ export class ShortcutManager {
   }
 
   async handle(e: KeyboardEvent, capture: boolean) {
-    const combo = normalizeCombo(e);
+    let combo = normalizeCombo(e);
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") combo = "Ctrl+F";
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") combo = "Ctrl+P";
     for (const reg of this.registrations) {
       const regCombo = typeof reg.combo === "function" ? await reg.combo() : reg.combo;
       if (regCombo !== combo) continue;
@@ -80,7 +82,10 @@ export class ShortcutManager {
         continue;
       }
       if (reg.capture !== undefined && reg.capture !== capture) continue;
-      if (reg.preventDefault !== false) e.preventDefault();
+      if (reg.preventDefault !== false) {
+        e.preventDefault();
+        (e as any).returnValue = false;
+      }
       if (reg.stopPropagation) e.stopPropagation();
       if (reg.stopImmediatePropagation) e.stopImmediatePropagation();
       try {

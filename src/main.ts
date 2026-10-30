@@ -767,7 +767,9 @@ shortcutManager.register({
     } catch {}
     return currentSettingsCache?.shortcuts?.search || "Ctrl+F";
   },
-  action: () => {
+  action: (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
     if (searchInput) {
       if (document.activeElement === searchInput) {
         searchInput.blur();
@@ -779,6 +781,8 @@ shortcutManager.register({
   allowInSearchInput: true,
   preventDefault: true,
   stopPropagation: true,
+  stopImmediatePropagation: true,
+  capture: true,
 });
 
 shortcutManager.register({
@@ -789,7 +793,9 @@ shortcutManager.register({
     } catch {}
     return currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
   },
-  action: async () => {
+  action: async (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
     isPaused = !isPaused;
     try {
       await invoke("set_listening_paused", { paused: isPaused });
@@ -808,6 +814,8 @@ shortcutManager.register({
   },
   preventDefault: true,
   stopPropagation: true,
+  stopImmediatePropagation: true,
+  capture: true,
 });
 
 shortcutManager.register({
