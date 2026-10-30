@@ -822,7 +822,6 @@ searchClearBtn.addEventListener("click", () => {
   searchClearBtn.style.display = "none";
   selectedIndex = 0;
   filterAndRender();
-  searchInput.focus();
 });
 
 // Filter Tabs
@@ -836,7 +835,7 @@ filterTabs.forEach((tab) => {
       await loadDeleted();
     }
     filterAndRender();
-    searchInput.focus();
+    // Don't auto-focus search bar
   });
 });
 
@@ -862,7 +861,6 @@ settingsBackBtn.addEventListener("click", () => {
   mainContent.style.flexDirection = "column";
   mainContent.style.flex = "1";
   mainContent.style.minHeight = "0";
-  searchInput.focus();
 });
 
 settingsSaveBtn.addEventListener("click", async () => {
