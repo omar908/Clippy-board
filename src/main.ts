@@ -965,9 +965,9 @@ settingsBtn.addEventListener("click", async () => {
     const settings: any = await invoke("get_settings");
     if (settingMaxHistory) settingMaxHistory.value = settings.max_history || 100;
     if (settingDeleteTtl) settingDeleteTtl.value = settings.delete_ttl_seconds ?? 60;
-    if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "";
-    if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "";
-    if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "";
+    if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "Alt+P";
+    if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "Delete";
+    if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "Ctrl+P";
     if (shortcutSearch) shortcutSearch.value = settings.shortcuts?.search || "Ctrl+F";
   } catch (e) {
     console.error("Failed to load settings:", e);
@@ -995,9 +995,9 @@ settingsSaveBtn.addEventListener("click", (ev) => {
         delete_immediately: parseInt(settingDeleteTtl.value) === 0,
         delete_ttl_seconds: parseInt(settingDeleteTtl.value) || 0,
         shortcuts: {
-          pinItem: shortcutPinItem.value || "",
-          delete: shortcutDelete.value || "",
-          pause: shortcutPause.value || "",
+          pinItem: shortcutPinItem.value || "Alt+P",
+          delete: shortcutDelete.value || "Delete",
+          pause: shortcutPause.value || "Ctrl+P",
           search: shortcutSearch.value || "Ctrl+F",
         },
       };
@@ -1013,9 +1013,9 @@ settingsSaveBtn.addEventListener("click", (ev) => {
 });
 
 shortcutsReset.addEventListener("click", () => {
-  if (shortcutPinItem) shortcutPinItem.value = "";
-  if (shortcutDelete) shortcutDelete.value = "";
-  if (shortcutPause) shortcutPause.value = "";
+  if (shortcutPinItem) shortcutPinItem.value = "Alt+P";
+  if (shortcutDelete) shortcutDelete.value = "Delete";
+  if (shortcutPause) shortcutPause.value = "Ctrl+P";
   if (shortcutSearch) shortcutSearch.value = "Ctrl+F";
 });
 
