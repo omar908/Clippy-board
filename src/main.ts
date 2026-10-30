@@ -804,11 +804,7 @@ window.addEventListener("keydown", (e) => {
         const target = filteredHistory[selectedIndex];
         if (target) {
           try {
-            if (target.pinned) {
-              await invoke("unpin_item", { id: target.id });
-            } else {
-              await invoke("toggle_pin", { id: target.id });
-            }
+            await invoke("toggle_pin", { id: target.id, pinned: !target.pinned });
             await fetchInitialHistory();
             filterAndRender();
           } catch {}
