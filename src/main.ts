@@ -927,25 +927,32 @@ settingsBackBtn.addEventListener("click", () => {
   mainContent.style.minHeight = "0";
 });
 
-settingsSaveBtn.addEventListener("click", async () => {
-  try {
-    const settings = {
-      max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
-      delete_immediately: parseInt(settingDeleteTtl.value) === 0,
-      delete_ttl_seconds: parseInt(settingDeleteTtl.value) || 0,
-      shortcuts: {
-        pinItem: shortcutPinItem.value || "",
-        delete: shortcutDelete.value || "",
-        pause: shortcutPause.value || "",
-        search: shortcutSearch.value || "Ctrl+F",
-      },
-    };
-    await invoke("save_settings_cmd", { settings });
-    alert("Settings saved");
-  } catch (e) {
-    console.error("Failed to save settings:", e);
-    alert("Failed to save settings");
-  }
+settingsSaveBtn.addEventListener("click", (ev) => {
+  ev.preventDefault();
+  ev.stopPropagation();
+  (async () => {
+    try {
+      await invoke("set_interacting", { interacting: true } as any).catch(() => {});
+      const settings = {
+        max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
+        delete_immediately: parseInt(settingDeleteTtl.value) === 0,
+        delete_ttl_seconds: parseInt(settingDeleteTtl.value) || 0,
+        shortcuts: {
+          pinItem: shortcutPinItem.value || "",
+          delete: shortcutDelete.value || "",
+          pause: shortcutPause.value || "",
+          search: shortcutSearch.value || "Ctrl+F",
+        },
+      };
+      await invoke("save_settings_cmd", { settings });
+      alert("Settings saved");
+      setTimeout(() => invoke("set_interacting", { interacting: false } as any).catch(() => {}), 1000);
+    } catch (e) {
+      console.error("Failed to save settings:", e);
+      alert("Failed to save settings");
+      invoke("set_interacting", { interacting: false } as any).catch(() => {});
+    }
+  })();
 });
 
 shortcutsReset.addEventListener("click", () => {
