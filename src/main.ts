@@ -749,6 +749,15 @@ let currentSettingsCache: any = null;
   try { currentSettingsCache = await invoke("get_settings"); } catch {}
 })();
 
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && (k === "f" || k === "p")) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+  }
+}, true);
+
 const shortcutManager = new ShortcutManager({
   isSettingsOpen: () => !!(settingsPage && settingsPage.style.display !== "none"),
   isSettingsInputActive: () => {
