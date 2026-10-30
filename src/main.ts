@@ -772,6 +772,7 @@ window.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
         e.preventDefault();
         e.stopPropagation();
+        e.returnValue = false;
       }
       if (combo === searchShortcut) {
         if ((e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); }
