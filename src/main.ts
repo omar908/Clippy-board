@@ -829,12 +829,12 @@ window.addEventListener("keydown", (e) => {
         await invoke("set_listening_paused", { paused: isPaused });
         if (isPaused) {
           pauseBtn.classList.add("active");
-          pauseBtn.innerHTML = "⏸";
+          try { pauseBtn.innerHTML = "⏸"; } catch {}
           pauseBtn.title = "Resume clipboard listening";
           document.body.classList.add("paused");
         } else {
           pauseBtn.classList.remove("active");
-          pauseBtn.innerHTML = "⏯";
+          try { pauseBtn.innerHTML = "⏯"; } catch {}
           pauseBtn.title = "Pause clipboard listening";
           document.body.classList.remove("paused");
         }
