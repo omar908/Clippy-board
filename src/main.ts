@@ -717,19 +717,23 @@ window.addEventListener("keydown", (e) => {
   // Modifier+arrow means "extend the text selection in the preview", not
   // "move the list selection" — leave those to the browser.
   const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
-  // Don't intercept shortcuts when typing in search input (except Escape)
-  if (document.activeElement === searchInput && e.key !== "Escape") {
-    // Allow Ctrl+A, Ctrl+C, Ctrl+X, Ctrl+V etc to work normally
-    if (e.ctrlKey || e.metaKey) {
-      // Let browser handle copy/paste/select all
+  // Don't intercept when typing in search input or settings inputs
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+    if (activeEl.id === "search-input") {
+      if (e.key === "Escape") {
+        // allow escape
+      } else if (e.ctrlKey || e.metaKey) {
+        return;
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Enter") {
+        return;
+      } else {
+        return;
+      }
+    } else if (activeEl.classList.contains("settings-input")) {
+      // Let settings inputs handle their own key recording
       return;
-    }
-    // Don't intercept arrow keys for navigation when typing in search
-    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      return;
-    }
-    // Don't intercept Enter when in search
-    if (e.key === "Enter") {
+    } else {
       return;
     }
   }
