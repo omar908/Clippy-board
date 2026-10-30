@@ -11,7 +11,17 @@ use rusqlite::{params, Connection};
 use crate::clipboard::{ClipboardItem, ClipboardPayload, DeletedItem};
 
 /// Maximum number of history items kept (matches the in-memory cap).
-pub const MAX_HISTORY: usize = 100;
+pub const DEFAULT_MAX_HISTORY: usize = 100;
+pub static MAX_HISTORY: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(100);
+
+pub fn get_max_history() -> usize {
+    MAX_HISTORY.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn set_max_history(max: usize) {
+    let capped = if max == 0 { 10000 } else { max.min(10000) };
+    MAX_HISTORY.store(capped, std::sync::atomic::Ordering::Relaxed);
+}
 
 const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS history (

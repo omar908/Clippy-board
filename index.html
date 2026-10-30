@@ -20,6 +20,7 @@
             <span class="app-title">Clippy-board</span>
           </div>
           <div class="header-actions">
+            <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
             <button id="pause-btn" class="icon-btn" title="Pause clipboard listening">⏸️</button>
             <button id="pin-btn" class="icon-btn" title="Toggle Pin (keep window open on blur)">📌</button>
             <button id="clear-btn" class="icon-btn" title="Clear All History">🗑️</button>
@@ -27,54 +28,165 @@
           </div>
         </header>
 
-        <!-- Search & Filter Controls -->
-        <div class="search-section">
-          <div class="search-bar">
-            <span class="search-icon">🔍</span>
-            <input
-              id="search-input"
-              type="text"
-              placeholder="Search clipboard history... (Type to filter)"
-              autocomplete="off"
-              spellcheck="false"
-              autofocus
-            />
-            <button id="search-clear-btn" class="search-clear-btn" style="display: none;">✕</button>
+        <!-- Settings Page -->
+        <div id="settings-page" class="settings-page" style="display: none;">
+          <div class="settings-header">
+            <button id="settings-back-btn" class="settings-back-btn">← Back</button>
+            <div class="settings-title">Settings</div>
           </div>
-
-          <div class="filter-tabs">
-            <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="count-all">0</span></button>
-            <button class="filter-tab" data-filter="pinned">Pinned <span class="tab-count" id="count-pinned">0</span></button>
-            <button class="filter-tab" data-filter="text">Text <span class="tab-count" id="count-text">0</span></button>
-            <button class="filter-tab" data-filter="image">Images <span class="tab-count" id="count-image">0</span></button>
-            <button class="filter-tab" data-filter="file">Files <span class="tab-count" id="count-file">0</span></button>
-            <button class="filter-tab" data-filter="deleted">Deleted <span class="tab-count" id="count-deleted">0</span></button>
+          <div class="settings-content">
+            <div class="settings-section">
+              <div class="settings-section-title">History</div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Max history items</div>
+                  <div class="settings-row-desc">Maximum number of items to keep (pinned items are always kept, max 10000)</div>
+                </div>
+                <input type="number" id="setting-max-history" class="settings-input" min="1" max="10000" value="100" />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Delete TTL (seconds)</div>
+                  <div class="settings-row-desc">Time before deleted items are permanently removed. Set to 0 to delete immediately</div>
+                </div>
+                <input type="number" id="setting-delete-ttl" class="settings-input" min="0" max="86400" value="60" />
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section-title">Shortcuts</div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Toggle window</div>
+                  <div class="settings-row-desc">Global shortcut</div>
+                </div>
+                <input type="text" id="shortcut-toggle" class="settings-input" value="Ctrl+Shift+Space" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Move selection up</div>
+                  <div class="settings-row-desc">Navigate up in list</div>
+                </div>
+                <input type="text" id="shortcut-move-up" class="settings-input" value="ArrowUp" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Move selection down</div>
+                  <div class="settings-row-desc">Navigate down in list</div>
+                </div>
+                <input type="text" id="shortcut-move-down" class="settings-input" value="ArrowDown" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Switch tab left</div>
+                  <div class="settings-row-desc">Previous filter tab</div>
+                </div>
+                <input type="text" id="shortcut-tab-left" class="settings-input" value="ArrowLeft" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Switch tab right</div>
+                  <div class="settings-row-desc">Next filter tab</div>
+                </div>
+                <input type="text" id="shortcut-tab-right" class="settings-input" value="ArrowRight" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Focus/Unfocus search</div>
+                  <div class="settings-row-desc">Toggle search bar focus</div>
+                </div>
+                <input type="text" id="shortcut-search" class="settings-input" value="Ctrl+F" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Copy/Select item</div>
+                  <div class="settings-row-desc">Copy selected item</div>
+                </div>
+                <input type="text" id="shortcut-copy" class="settings-input" value="Enter" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Pin/Unpin selected item</div>
+                  <div class="settings-row-desc">Toggle pin on selected item</div>
+                </div>
+                <input type="text" id="shortcut-pin-item" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Delete selected item</div>
+                  <div class="settings-row-desc">Delete selected item</div>
+                </div>
+                <input type="text" id="shortcut-delete" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <div class="settings-row-label">Pause/Resume listening</div>
+                  <div class="settings-row-desc">Toggle clipboard listening</div>
+                </div>
+                <input type="text" id="shortcut-pause" class="settings-input" placeholder="Not set" readonly />
+              </div>
+              <button id="shortcuts-reset" class="settings-btn">Reset to defaults</button>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section-title">About</div>
+              <div class="settings-about">
+                <div>Clippy-board v0.1.0</div>
+                <div class="settings-about-sub">Clipboard Manager</div>
+              </div>
+            </div>
+            <button id="settings-save-btn" class="settings-save-btn">Save Settings</button>
           </div>
         </div>
 
-        <!-- History List -->
-        <main class="history-container" id="history-container">
-          <div class="empty-state" id="empty-state">
-            <div class="empty-icon">📋</div>
-            <div class="empty-title">Clipboard History is Empty</div>
-            <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy-board will automatically capture them!</div>
-            <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy-board</div>
+        <!-- Main Content Wrapper -->
+        <div id="main-content">
+          <!-- Search & Filter Controls -->
+          <div class="search-section">
+            <div class="search-bar">
+              <span class="search-icon">🔍</span>
+              <input
+                id="search-input"
+                type="text"
+                placeholder="Search clipboard history... (Type to filter)"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="search-clear-btn" class="search-clear-btn" style="display: none;">✕</button>
+            </div>
+
+            <div class="filter-tabs">
+              <button class="filter-tab active" data-filter="all">All <span class="tab-count" id="count-all">0</span></button>
+              <button class="filter-tab" data-filter="pinned">Pinned <span class="tab-count" id="count-pinned">0</span></button>
+              <button class="filter-tab" data-filter="text">Text <span class="tab-count" id="count-text">0</span></button>
+              <button class="filter-tab" data-filter="image">Images <span class="tab-count" id="count-image">0</span></button>
+              <button class="filter-tab" data-filter="file">Files <span class="tab-count" id="count-file">0</span></button>
+              <button class="filter-tab" data-filter="deleted">Deleted <span class="tab-count" id="count-deleted">0</span></button>
+            </div>
           </div>
 
-          <div class="history-list" id="history-list"></div>
-        </main>
+          <!-- History List -->
+          <main class="history-container" id="history-container">
+            <div class="empty-state" id="empty-state">
+              <div class="empty-icon">📋</div>
+              <div class="empty-title">Clipboard History is Empty</div>
+              <div class="empty-desc">Copy text, images, or files anywhere in Windows.<br/>Clippy-board will automatically capture them!</div>
+              <div class="empty-hint">Press <strong>Ctrl + Shift + Space</strong> anytime to summon Clippy-board</div>
+            </div>
 
-        <!-- Footer Bar -->
-        <footer class="clippy-footer">
-          <div class="footer-shortcuts">
-            <span class="shortcut-tag"><kbd>↑</kbd><kbd>↓</kbd> Move</span>
-            <span class="shortcut-tag"><kbd>↵</kbd> Copy</span>
-            <span class="shortcut-tag"><kbd>Esc</kbd> Close</span>
-          </div>
-          <div class="footer-status" id="footer-status">
-            <span>Global: <kbd>Ctrl+Shift+Space</kbd></span>
-          </div>
-        </footer>
+            <div class="history-list" id="history-list"></div>
+          </main>
+
+          <!-- Footer Bar -->
+          <footer class="clippy-footer">
+            <div class="footer-shortcuts">
+              <span class="shortcut-tag"><kbd>↑</kbd><kbd>↓</kbd> Move</span>
+              <span class="shortcut-tag"><kbd>↵</kbd> Copy</span>
+              <span class="shortcut-tag"><kbd>Esc</kbd> Close</span>
+            </div>
+            <div class="footer-status" id="footer-status">
+              <span>Global: <kbd>Ctrl+Shift+Space</kbd></span>
+            </div>
+          </footer>
+        </div>
 
         <!-- Resize grip (bottom-right of the main GUI, never the preview) -->
         <div id="resize-grip" class="resize-grip" title="Resize"></div>

@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub mod settings;
 pub mod storage;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -58,7 +59,19 @@ fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Resu
 
 #[tauri::command]
 fn delete_item(state: State<ClipboardState>, id: String, ttl_seconds: Option<u64>) -> Result<(), String> {
-    let ttl = ttl_seconds.unwrap_or(60).clamp(60, 600);
+    let ttl = ttl_seconds.unwrap_or(60);
+    if ttl == 0 {
+        // Delete immediately
+        let mut history = state.history.lock().unwrap();
+        history.retain(|i| i.id != id);
+        drop(history);
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            storage::delete(conn, &id).ok();
+        }
+        return Ok(());
+    }
+    let ttl = ttl.clamp(1, 86400);
     let ttl_ms = ttl * 1000;
     let now = now_ms();
     let mut history = state.history.lock().unwrap();
@@ -116,7 +129,30 @@ fn clear_history(
     ids: Option<Vec<String>>,
     ttl_seconds: Option<u64>,
 ) -> Result<Vec<String>, String> {
-    let ttl = ttl_seconds.unwrap_or(60).clamp(60, 600);
+    let ttl = ttl_seconds.unwrap_or(60);
+    if ttl == 0 {
+        let mut history = state.history.lock().unwrap();
+        let to_soft_delete: Vec<ClipboardItem> = history
+            .iter()
+            .filter(|item| !item.pinned)
+            .filter(|item| match &ids {
+                Some(ids) => ids.contains(&item.id),
+                None => true,
+            })
+            .cloned()
+            .collect();
+        let removed_ids: Vec<String> = to_soft_delete.iter().map(|i| i.id.clone()).collect();
+        history.retain(|item| !removed_ids.contains(&item.id));
+        drop(history);
+        let db = state.db.lock().unwrap();
+        if let Some(conn) = db.as_ref() {
+            for id in &removed_ids {
+                storage::delete(conn, id).ok();
+            }
+        }
+        return Ok(removed_ids);
+    }
+    let ttl = ttl.clamp(1, 86400);
     let ttl_ms = ttl * 1000;
     let now = now_ms();
     let mut history = state.history.lock().unwrap();
@@ -216,6 +252,17 @@ fn set_listening_paused(paused: bool) -> bool {
 #[tauri::command]
 fn get_listening_paused() -> bool {
     clipboard::IS_LISTENING_PAUSED.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
+fn get_settings(app: AppHandle) -> settings::AppSettings {
+    settings::load_settings(&app)
+}
+
+#[tauri::command]
+fn save_settings_cmd(app: AppHandle, settings: settings::AppSettings) -> Result<(), String> {
+    storage::set_max_history(settings.max_history);
+    settings::save_settings(&app, &settings)
 }
 
 #[tauri::command]
@@ -585,6 +632,10 @@ pub fn run() {
         .setup(move |app| {
             app_log("Setup hook entered");
 
+            // Load settings
+            let app_settings = settings::load_settings(app.handle());
+            storage::set_max_history(app_settings.max_history);
+            
             // Load history BEFORE creating the webviews. Building a window can
             // pump messages, letting the page invoke `get_history` while setup
             // is still running; opening storage afterwards made startup racy
@@ -819,6 +870,8 @@ pub fn run() {
             get_pinned,
             set_listening_paused,
             get_listening_paused,
+            get_settings,
+            save_settings_cmd,
             set_interacting,
             is_pointer_held,
             preview_show,

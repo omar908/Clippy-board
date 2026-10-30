@@ -40,6 +40,18 @@ const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
 const pinBtn = document.getElementById("pin-btn") as HTMLButtonElement;
 const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
 const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
+const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement;
+const settingsPage = document.getElementById("settings-page") as HTMLDivElement;
+const settingsBackBtn = document.getElementById("settings-back-btn") as HTMLButtonElement;
+const mainContent = document.getElementById("main-content") as HTMLDivElement;
+const settingMaxHistory = document.getElementById("setting-max-history") as HTMLInputElement;
+const settingDeleteTtl = document.getElementById("setting-delete-ttl") as HTMLInputElement;
+const shortcutPinItem = document.getElementById("shortcut-pin-item") as HTMLInputElement;
+const shortcutDelete = document.getElementById("shortcut-delete") as HTMLInputElement;
+const shortcutPause = document.getElementById("shortcut-pause") as HTMLInputElement;
+const shortcutSearch = document.getElementById("shortcut-search") as HTMLInputElement;
+const shortcutsReset = document.getElementById("shortcuts-reset") as HTMLButtonElement;
+const settingsSaveBtn = document.getElementById("settings-save-btn") as HTMLButtonElement;
 const countAll = document.getElementById("count-all") as HTMLSpanElement;
 const countText = document.getElementById("count-text") as HTMLSpanElement;
 const countImage = document.getElementById("count-image") as HTMLSpanElement;
@@ -426,7 +438,14 @@ async function deleteItem(id: string) {
       console.warn("Cannot delete pinned item");
       return;
     }
-    await invoke("delete_item", { id, ttlSeconds: 60 });
+    let ttlSeconds = 60;
+    try {
+      const settings: any = await invoke("get_settings");
+      if (settings && typeof settings.delete_ttl_seconds === "number") {
+        ttlSeconds = settings.delete_ttl_seconds;
+      }
+    } catch {}
+    await invoke("delete_item", { id, ttlSeconds });
     history = history.filter((i) => i.id !== id);
     await loadDeleted();
     updateCounts();
@@ -504,7 +523,14 @@ async function clearView() {
   const ids = (filteredHistory as any[]).filter((i: any) => !i.pinned).map((i: any) => i.id);
   if (ids.length === 0) return;
   try {
-    const removed = await invoke<string[]>("clear_history", { ids, ttlSeconds: 60 });
+    let ttlSeconds = 60;
+    try {
+      const settings: any = await invoke("get_settings");
+      if (settings && typeof settings.delete_ttl_seconds === "number") {
+        ttlSeconds = settings.delete_ttl_seconds;
+      }
+    } catch {}
+    const removed = await invoke<string[]>("clear_history", { ids, ttlSeconds });
     const gone = new Set(removed);
     history = history.filter((i) => !gone.has(i.id));
     await loadDeleted();
@@ -694,6 +720,76 @@ function handleListKey(key: string): void {
 }
 
 // Keyboard Navigation
+function normalizeKeyCombo(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.metaKey) parts.push("Meta");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  let key = e.key;
+  if (key === " ") key = "Space";
+  if (key === "Enter") key = "Enter";
+  if (key === "Escape") key = "Escape";
+  if (key === "Delete") key = "Delete";
+  if (key === "Backspace") key = "Backspace";
+  if (key === "ArrowUp") key = "ArrowUp";
+  if (key === "ArrowDown") key = "ArrowDown";
+  if (key === "ArrowLeft") key = "ArrowLeft";
+  if (key === "ArrowRight") key = "ArrowRight";
+  if (key === "Tab") key = "Tab";
+  if (key.length === 1) key = key.toUpperCase();
+  if (key === "Control" || key === "Meta" || key === "Alt" || key === "Shift") return parts.join("+");
+  parts.push(key);
+  return parts.join("+");
+}
+
+let currentSettingsCache: any = null;
+(async () => {
+  try { currentSettingsCache = await invoke("get_settings"); } catch {}
+})();
+
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && k === "f") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    // Try to focus search
+    if (searchInput) {
+      if (document.activeElement === searchInput) {
+        searchInput.blur();
+      } else {
+        searchInput.focus();
+      }
+    }
+    return false;
+  }
+  if ((e.ctrlKey || e.metaKey) && k === "p") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    // Toggle pause
+    (async () => {
+      try {
+        isPaused = !isPaused;
+        await invoke("set_listening_paused", { paused: isPaused });
+        if (isPaused) {
+          pauseBtn.classList.add("active");
+          try { pauseBtn.innerHTML = "⏸"; } catch {}
+          pauseBtn.title = "Resume clipboard listening";
+          document.body.classList.add("paused");
+        } else {
+          pauseBtn.classList.remove("active");
+          try { pauseBtn.innerHTML = "⏯"; } catch {}
+          pauseBtn.title = "Pause clipboard listening";
+          document.body.classList.remove("paused");
+        }
+      } catch {}
+    })();
+    return false;
+  }
+}, true);
+
 window.addEventListener("keydown", (e) => {
   const navKey =
     e.key === "ArrowDown" ||
@@ -703,9 +799,107 @@ window.addEventListener("keydown", (e) => {
     e.key === "End" ||
     e.key === "PageUp" ||
     e.key === "PageDown";
-  // Modifier+arrow means "extend the text selection in the preview", not
-  // "move the list selection" — leave those to the browser.
   const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
+  if (settingsPage && settingsPage.style.display !== "none") {
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && activeEl.classList.contains("settings-input")) {
+      return;
+    }
+  }
+  (async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+      let combo = normalizeKeyCombo(e);
+      // Normalize common forms
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") combo = "Ctrl+F";
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") combo = "Ctrl+P";
+      if (combo === searchShortcut || (e.ctrlKey && e.key.toLowerCase() === "f")) {
+        if ((e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); }
+        if (settingsPage && settingsPage.style.display !== "none") {
+          const activeEl = document.activeElement as HTMLElement | null;
+          if (activeEl && activeEl.classList.contains("settings-input")) return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (document.activeElement === searchInput) {
+          searchInput.blur();
+        } else {
+          searchInput.focus();
+        }
+        return;
+      }
+      const pinShortcut = currentSettingsCache?.shortcuts?.pinItem;
+      if (pinShortcut && combo === pinShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = filteredHistory[selectedIndex];
+        if (target) {
+          try {
+            await invoke("toggle_pin", { id: target.id, pinned: !target.pinned });
+            await fetchInitialHistory();
+            filterAndRender();
+          } catch {}
+        }
+        return;
+      }
+      const delShortcut = currentSettingsCache?.shortcuts?.delete;
+      if (delShortcut && combo === delShortcut) {
+        e.preventDefault();
+        e.stopPropagation();
+        const target = filteredHistory[selectedIndex];
+        if (target && !target.pinned) {
+          deleteItem(target.id);
+        }
+        return;
+      }
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+      if (pauseShortcut && (combo === pauseShortcut || (e.ctrlKey && e.key.toLowerCase() === "p"))) {
+        e.preventDefault();
+        e.stopPropagation();
+        isPaused = !isPaused;
+        await invoke("set_listening_paused", { paused: isPaused });
+        if (isPaused) {
+          pauseBtn.classList.add("active");
+          try { pauseBtn.innerHTML = "⏸"; } catch {}
+          pauseBtn.title = "Resume clipboard listening";
+          document.body.classList.add("paused");
+        } else {
+          pauseBtn.classList.remove("active");
+          try { pauseBtn.innerHTML = "⏯"; } catch {}
+          pauseBtn.title = "Pause clipboard listening";
+          document.body.classList.remove("paused");
+        }
+        return;
+      }
+    } catch {}
+  })();
+  // Don't intercept when typing in search input
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (activeEl && activeEl.id === "search-input") {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      searchInput.blur();
+      return;
+    } else if (e.ctrlKey || e.metaKey) {
+      return;
+    } else if (e.key === "Enter") {
+      return;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      // Allow tab switching even when in search
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      // Don't allow arrow keys in search to navigate list
+      return;
+    } else {
+      return;
+    }
+  } else if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+    if (activeEl.classList.contains("settings-input")) {
+      return;
+    }
+    return;
+  }
 
   // In the preview window the keys belong to the main window's list: forward
   // them so arrow traversal keeps working while the pointer is in the preview
@@ -725,6 +919,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
+    if (settingsPage && settingsPage.style.display !== "none") {
+      e.preventDefault();
+      e.stopPropagation();
+      settingsPage.style.display = "none";
+      mainContent.style.display = "flex";
+      mainContent.style.flexDirection = "column";
+      mainContent.style.flex = "1";
+      mainContent.style.minHeight = "0";
+      return;
+    }
     e.preventDefault();
     // Hide first, then restore the pre-preview geometry while invisible.
     invoke("hide_window").then(() => previewDismiss()).catch(() => {});
@@ -766,7 +970,6 @@ searchClearBtn.addEventListener("click", () => {
   searchClearBtn.style.display = "none";
   selectedIndex = 0;
   filterAndRender();
-  searchInput.focus();
 });
 
 // Filter Tabs
@@ -780,9 +983,101 @@ filterTabs.forEach((tab) => {
       await loadDeleted();
     }
     filterAndRender();
-    searchInput.focus();
+    // Don't auto-focus search bar
   });
 });
+
+// Settings
+settingsBtn.addEventListener("click", async () => {
+  try {
+    const settings: any = await invoke("get_settings");
+    if (settingMaxHistory) settingMaxHistory.value = settings.max_history || 100;
+    if (settingDeleteTtl) settingDeleteTtl.value = settings.delete_ttl_seconds ?? 60;
+    if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "Alt+P";
+    if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "Delete";
+    if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "Ctrl+P";
+    if (shortcutSearch) shortcutSearch.value = settings.shortcuts?.search || "Ctrl+F";
+  } catch (e) {
+    console.error("Failed to load settings:", e);
+  }
+  mainContent.style.display = "none";
+  settingsPage.style.display = "flex";
+});
+
+settingsBackBtn.addEventListener("click", () => {
+  settingsPage.style.display = "none";
+  mainContent.style.display = "flex";
+  mainContent.style.flexDirection = "column";
+  mainContent.style.flex = "1";
+  mainContent.style.minHeight = "0";
+});
+
+settingsSaveBtn.addEventListener("click", (ev) => {
+  ev.preventDefault();
+  ev.stopPropagation();
+  (async () => {
+    try {
+      await invoke("set_interacting", { interacting: true } as any).catch(() => {});
+      const settings = {
+        max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
+        delete_immediately: parseInt(settingDeleteTtl.value) === 0,
+        delete_ttl_seconds: parseInt(settingDeleteTtl.value) || 0,
+        shortcuts: {
+          pinItem: shortcutPinItem.value || "Alt+P",
+          delete: shortcutDelete.value || "Delete",
+          pause: shortcutPause.value || "Ctrl+P",
+          search: shortcutSearch.value || "Ctrl+F",
+        },
+      };
+      await invoke("save_settings_cmd", { settings });
+      alert("Settings saved");
+      setTimeout(() => invoke("set_interacting", { interacting: false } as any).catch(() => {}), 1000);
+    } catch (e) {
+      console.error("Failed to save settings:", e);
+      alert("Failed to save settings");
+      invoke("set_interacting", { interacting: false } as any).catch(() => {});
+    }
+  })();
+});
+
+shortcutsReset.addEventListener("click", () => {
+  if (shortcutPinItem) shortcutPinItem.value = "Alt+P";
+  if (shortcutDelete) shortcutDelete.value = "Delete";
+  if (shortcutPause) shortcutPause.value = "Ctrl+P";
+  if (shortcutSearch) shortcutSearch.value = "Ctrl+F";
+});
+
+function recordShortcut(input: HTMLInputElement) {
+  input.addEventListener("keydown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const parts = [];
+    if (e.ctrlKey) parts.push("Ctrl");
+    if (e.shiftKey) parts.push("Shift");
+    if (e.altKey) parts.push("Alt");
+    if (e.metaKey) parts.push("Meta");
+    const key = e.key;
+    if (key !== "Control" && key !== "Shift" && key !== "Alt" && key !== "Meta") {
+      if (key === " ") parts.push("Space");
+      else if (key === "ArrowUp") parts.push("ArrowUp");
+      else if (key === "ArrowDown") parts.push("ArrowDown");
+      else if (key === "ArrowLeft") parts.push("ArrowLeft");
+      else if (key === "ArrowRight") parts.push("ArrowRight");
+      else if (key === "Delete") parts.push("Delete");
+      else if (key === "Backspace") parts.push("Backspace");
+      else if (key === "Enter") parts.push("Enter");
+      else if (key === "Escape") parts.push("Escape");
+      else if (key === "Tab") parts.push("Tab");
+      else parts.push(key.length === 1 ? key.toUpperCase() : key);
+      input.value = parts.join("+");
+    }
+  });
+}
+
+if (shortcutPinItem) recordShortcut(shortcutPinItem);
+if (shortcutDelete) recordShortcut(shortcutDelete);
+if (shortcutPause) recordShortcut(shortcutPause);
+if (shortcutSearch) recordShortcut(shortcutSearch);
 
 // Header action buttons
 pauseBtn.addEventListener("click", async () => {
@@ -886,8 +1181,16 @@ headerEl.addEventListener("dblclick", async (e) => {
 
 // Window focus event
 window.addEventListener("focus", () => {
-  searchInput.focus();
-  searchInput.select();
+  // Don't steal focus to search if settings page is open
+  if (settingsPage && settingsPage.style.display !== "none") {
+    return;
+  }
+  // Don't steal focus if user is interacting with settings
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (activeEl && activeEl.classList.contains("settings-input")) {
+    return;
+  }
+  // Don't auto-focus search on window focus
 });
 
 // Leaving the window (focus loss) also ends the keyboard takeover.
@@ -914,7 +1217,8 @@ async function setupListener() {
     deletedItems = deletedItems.filter((i) => i.id !== newItem.id);
     // Prepend new item
     history = [newItem, ...history.filter((i) => i.id !== newItem.id)];
-    if (history.length > 100) history = history.slice(0, 100);
+    const maxH = history.length;
+    if (maxH > 10000) history = history.slice(0, 10000);
     updateCounts();
     selectedIndex = 0;
     filterAndRender();
@@ -955,7 +1259,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   if (label === "preview") return;
 
-  searchInput.focus();
   fetchInitialHistory();
   setupListener();
 });
