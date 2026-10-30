@@ -750,10 +750,42 @@ let currentSettingsCache: any = null;
 
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && (k === "p" || k === "f")) {
+  if ((e.ctrlKey || e.metaKey) && k === "f") {
     e.preventDefault();
     e.stopImmediatePropagation();
     e.stopPropagation();
+    // Try to focus search
+    if (searchInput) {
+      if (document.activeElement === searchInput) {
+        searchInput.blur();
+      } else {
+        searchInput.focus();
+      }
+    }
+    return false;
+  }
+  if ((e.ctrlKey || e.metaKey) && k === "p") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    // Toggle pause
+    (async () => {
+      try {
+        isPaused = !isPaused;
+        await invoke("set_listening_paused", { paused: isPaused });
+        if (isPaused) {
+          pauseBtn.classList.add("active");
+          try { pauseBtn.innerHTML = "⏸"; } catch {}
+          pauseBtn.title = "Resume clipboard listening";
+          document.body.classList.add("paused");
+        } else {
+          pauseBtn.classList.remove("active");
+          try { pauseBtn.innerHTML = "⏯"; } catch {}
+          pauseBtn.title = "Pause clipboard listening";
+          document.body.classList.remove("paused");
+        }
+      } catch {}
+    })();
     return false;
   }
 }, true);
