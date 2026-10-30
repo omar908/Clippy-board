@@ -437,7 +437,14 @@ async function deleteItem(id: string) {
       console.warn("Cannot delete pinned item");
       return;
     }
-    await invoke("delete_item", { id, ttlSeconds: 60 });
+    let ttlSeconds = 60;
+    try {
+      const settings: any = await invoke("get_settings");
+      if (settings && typeof settings.delete_ttl_seconds === "number") {
+        ttlSeconds = settings.delete_ttl_seconds;
+      }
+    } catch {}
+    await invoke("delete_item", { id, ttlSeconds });
     history = history.filter((i) => i.id !== id);
     await loadDeleted();
     updateCounts();
@@ -515,7 +522,14 @@ async function clearView() {
   const ids = (filteredHistory as any[]).filter((i: any) => !i.pinned).map((i: any) => i.id);
   if (ids.length === 0) return;
   try {
-    const removed = await invoke<string[]>("clear_history", { ids, ttlSeconds: 60 });
+    let ttlSeconds = 60;
+    try {
+      const settings: any = await invoke("get_settings");
+      if (settings && typeof settings.delete_ttl_seconds === "number") {
+        ttlSeconds = settings.delete_ttl_seconds;
+      }
+    } catch {}
+    const removed = await invoke<string[]>("clear_history", { ids, ttlSeconds });
     const gone = new Set(removed);
     history = history.filter((i) => !gone.has(i.id));
     await loadDeleted();
