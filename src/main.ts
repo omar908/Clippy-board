@@ -49,6 +49,7 @@ const settingDeleteTtl = document.getElementById("setting-delete-ttl") as HTMLIn
 const shortcutPinItem = document.getElementById("shortcut-pin-item") as HTMLInputElement;
 const shortcutDelete = document.getElementById("shortcut-delete") as HTMLInputElement;
 const shortcutPause = document.getElementById("shortcut-pause") as HTMLInputElement;
+const shortcutSearch = document.getElementById("shortcut-search") as HTMLInputElement;
 const shortcutsReset = document.getElementById("shortcuts-reset") as HTMLButtonElement;
 const settingsSaveBtn = document.getElementById("settings-save-btn") as HTMLButtonElement;
 const countAll = document.getElementById("count-all") as HTMLSpanElement;
@@ -719,6 +720,34 @@ function handleListKey(key: string): void {
 }
 
 // Keyboard Navigation
+function normalizeKeyCombo(e: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.metaKey) parts.push("Meta");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  let key = e.key;
+  if (key === " ") key = "Space";
+  if (key === "Enter") key = "Enter";
+  if (key === "Escape") key = "Escape";
+  if (key === "Delete") key = "Delete";
+  if (key === "Backspace") key = "Backspace";
+  if (key === "ArrowUp") key = "ArrowUp";
+  if (key === "ArrowDown") key = "ArrowDown";
+  if (key === "ArrowLeft") key = "ArrowLeft";
+  if (key === "ArrowRight") key = "ArrowRight";
+  if (key === "Tab") key = "Tab";
+  if (key.length === 1) key = key.toUpperCase();
+  if (key === "Control" || key === "Meta" || key === "Alt" || key === "Shift") return parts.join("+");
+  parts.push(key);
+  return parts.join("+");
+}
+
+let currentSettingsCache: any = null;
+(async () => {
+  try { currentSettingsCache = await invoke("get_settings"); } catch {}
+})();
+
 window.addEventListener("keydown", (e) => {
   const navKey =
     e.key === "ArrowDown" ||
@@ -728,17 +757,38 @@ window.addEventListener("keydown", (e) => {
     e.key === "End" ||
     e.key === "PageUp" ||
     e.key === "PageDown";
-  // Modifier+arrow means "extend the text selection in the preview", not
-  // "move the list selection" — leave those to the browser.
   const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
-  // Don't intercept when settings page is open
   if (settingsPage && settingsPage.style.display !== "none") {
     const activeEl = document.activeElement as HTMLElement | null;
     if (activeEl && activeEl.classList.contains("settings-input")) {
-      // Let settings handle it
       return;
     }
   }
+  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "s" || e.key.toLowerCase() === "f")) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  (async () => {
+    try {
+      if (!currentSettingsCache) currentSettingsCache = await invoke("get_settings");
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+S";
+      const combo = normalizeKeyCombo(e);
+      if (combo === searchShortcut) {
+        if (settingsPage && settingsPage.style.display !== "none") {
+          const activeEl = document.activeElement as HTMLElement | null;
+          if (activeEl && activeEl.classList.contains("settings-input")) return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        if (document.activeElement === searchInput) {
+          searchInput.blur();
+        } else {
+          searchInput.focus();
+        }
+        return;
+      }
+    } catch {}
+  })();
   // Don't intercept when typing in search input
   const activeEl = document.activeElement as HTMLElement | null;
   if (activeEl && activeEl.id === "search-input") {
@@ -851,6 +901,7 @@ settingsBtn.addEventListener("click", async () => {
     if (shortcutPinItem) shortcutPinItem.value = settings.shortcuts?.pinItem || "";
     if (shortcutDelete) shortcutDelete.value = settings.shortcuts?.delete || "";
     if (shortcutPause) shortcutPause.value = settings.shortcuts?.pause || "";
+    if (shortcutSearch) shortcutSearch.value = settings.shortcuts?.search || "Ctrl+S";
   } catch (e) {
     console.error("Failed to load settings:", e);
   }
@@ -876,6 +927,7 @@ settingsSaveBtn.addEventListener("click", async () => {
         pinItem: shortcutPinItem.value || "",
         delete: shortcutDelete.value || "",
         pause: shortcutPause.value || "",
+        search: shortcutSearch.value || "Ctrl+S",
       },
     };
     await invoke("save_settings_cmd", { settings });
@@ -890,6 +942,7 @@ shortcutsReset.addEventListener("click", () => {
   if (shortcutPinItem) shortcutPinItem.value = "";
   if (shortcutDelete) shortcutDelete.value = "";
   if (shortcutPause) shortcutPause.value = "";
+  if (shortcutSearch) shortcutSearch.value = "Ctrl+S";
 });
 
 function recordShortcut(input: HTMLInputElement) {
@@ -922,6 +975,7 @@ function recordShortcut(input: HTMLInputElement) {
 if (shortcutPinItem) recordShortcut(shortcutPinItem);
 if (shortcutDelete) recordShortcut(shortcutDelete);
 if (shortcutPause) recordShortcut(shortcutPause);
+if (shortcutSearch) recordShortcut(shortcutSearch);
 
 // Header action buttons
 pauseBtn.addEventListener("click", async () => {
