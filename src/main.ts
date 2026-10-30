@@ -725,13 +725,13 @@ window.addEventListener("keydown", (e) => {
         // allow escape
       } else if (e.ctrlKey || e.metaKey) {
         return;
-      } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "Enter") {
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter") {
         return;
       } else {
         return;
       }
     } else if (activeEl.classList.contains("settings-input")) {
-      // Let settings inputs handle their own key recording
+      // Let settings inputs handle their own key recording - don't interfere
       return;
     } else {
       return;
@@ -884,7 +884,10 @@ function recordShortcut(input: HTMLInputElement) {
       else if (key === "ArrowRight") parts.push("ArrowRight");
       else if (key === "Delete") parts.push("Delete");
       else if (key === "Backspace") parts.push("Backspace");
-      else parts.push(key.toUpperCase());
+      else if (key === "Enter") parts.push("Enter");
+      else if (key === "Escape") parts.push("Escape");
+      else if (key === "Tab") parts.push("Tab");
+      else parts.push(key.length === 1 ? key.toUpperCase() : key);
       input.value = parts.join("+");
     }
   });
