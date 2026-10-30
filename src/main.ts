@@ -717,25 +717,34 @@ window.addEventListener("keydown", (e) => {
   // Modifier+arrow means "extend the text selection in the preview", not
   // "move the list selection" — leave those to the browser.
   const modified = e.shiftKey || e.ctrlKey || e.metaKey || e.altKey;
-  // Don't intercept when typing in search input or settings inputs
-  const activeEl = document.activeElement as HTMLElement | null;
-  if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
-    if (activeEl.id === "search-input") {
-      if (e.key === "Escape") {
-        // allow escape
-      } else if (e.ctrlKey || e.metaKey) {
-        return;
-      } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter") {
-        return;
-      } else {
-        return;
-      }
-    } else if (activeEl.classList.contains("settings-input")) {
-      // Let settings inputs handle their own key recording - don't interfere
+  // Don't intercept when settings page is open
+  if (settingsPage && settingsPage.style.display !== "none") {
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl && activeEl.classList.contains("settings-input")) {
+      // Let settings handle it
       return;
+    }
+    // Allow some navigation in settings if needed, but generally don't interfere
+  }
+  // Don't intercept when typing in search input
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (activeEl && activeEl.id === "search-input") {
+    if (e.key === "Escape") {
+      // allow escape
+    } else if (e.ctrlKey || e.metaKey) {
+      return;
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter") {
+      return;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      // Allow tab switching even when in search
     } else {
       return;
     }
+  } else if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+    if (activeEl.classList.contains("settings-input")) {
+      return;
+    }
+    return;
   }
 
   // In the preview window the keys belong to the main window's list: forward
@@ -999,6 +1008,15 @@ headerEl.addEventListener("dblclick", async (e) => {
 
 // Window focus event
 window.addEventListener("focus", () => {
+  // Don't steal focus to search if settings page is open
+  if (settingsPage && settingsPage.style.display !== "none") {
+    return;
+  }
+  // Don't steal focus if user is interacting with settings
+  const activeEl = document.activeElement as HTMLElement | null;
+  if (activeEl && activeEl.classList.contains("settings-input")) {
+    return;
+  }
   searchInput.focus();
   searchInput.select();
 });
