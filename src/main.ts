@@ -749,9 +749,11 @@ let currentSettingsCache: any = null;
 })();
 
 window.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "f")) {
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && (k === "p" || k === "f")) {
     e.preventDefault();
     e.stopImmediatePropagation();
+    e.stopPropagation();
     return false;
   }
 }, true);
