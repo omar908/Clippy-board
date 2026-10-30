@@ -764,16 +764,13 @@ window.addEventListener("keydown", (e) => {
       return;
     }
   }
-  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "s" || e.key.toLowerCase() === "f")) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
   (async () => {
     try {
-      if (!currentSettingsCache) currentSettingsCache = await invoke("get_settings");
+      currentSettingsCache = await invoke("get_settings");
       const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
       const combo = normalizeKeyCombo(e);
       if (combo === searchShortcut) {
+        if ((e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); }
         if (settingsPage && settingsPage.style.display !== "none") {
           const activeEl = document.activeElement as HTMLElement | null;
           if (activeEl && activeEl.classList.contains("settings-input")) return;
@@ -792,16 +789,13 @@ window.addEventListener("keydown", (e) => {
         e.preventDefault();
         e.stopPropagation();
         const target = filteredHistory[selectedIndex];
-        if (target && !target.pinned) {
-          // toggle pin via button logic
+        if (target) {
           try {
-            await invoke("toggle_pin", { id: target.id });
-            await fetchInitialHistory();
-            filterAndRender();
-          } catch {}
-        } else if (target && target.pinned) {
-          try {
-            await invoke("unpin_item", { id: target.id });
+            if (target.pinned) {
+              await invoke("unpin_item", { id: target.id });
+            } else {
+              await invoke("toggle_pin", { id: target.id });
+            }
             await fetchInitialHistory();
             filterAndRender();
           } catch {}
