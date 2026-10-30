@@ -778,13 +778,11 @@ window.addEventListener("keydown", (e) => {
     try {
       currentSettingsCache = await invoke("get_settings");
       const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
-      const combo = normalizeKeyCombo(e);
-      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "p" || e.key.toLowerCase() === "f")) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.returnValue = false;
-      }
-      if (combo === searchShortcut) {
+      let combo = normalizeKeyCombo(e);
+      // Normalize common forms
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") combo = "Ctrl+F";
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") combo = "Ctrl+P";
+      if (combo === searchShortcut || (e.ctrlKey && e.key.toLowerCase() === "f")) {
         if ((e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); }
         if (settingsPage && settingsPage.style.display !== "none") {
           const activeEl = document.activeElement as HTMLElement | null;
@@ -823,8 +821,8 @@ window.addEventListener("keydown", (e) => {
         }
         return;
       }
-      const pauseShortcut = currentSettingsCache?.shortcuts?.pause;
-      if (pauseShortcut && combo === pauseShortcut) {
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+      if (pauseShortcut && (combo === pauseShortcut || (e.ctrlKey && e.key.toLowerCase() === "p"))) {
         e.preventDefault();
         e.stopPropagation();
         isPaused = !isPaused;
