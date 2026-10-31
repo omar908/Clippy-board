@@ -5,6 +5,7 @@ import type { ClipboardItem, DeletedItem } from "./types";
 import { ShortcutManager } from "./shortcuts";
 import { deleteItemAction } from "./actions";
 import * as api from "./api";
+import { getEl } from "./ui/dom";
 // import { renderList as renderListUI } from "./ui/render/list";
 import {
   initPreview,
@@ -20,8 +21,8 @@ let history: ClipboardItem[] = [];
 let filteredHistory: ClipboardItem[] = [];
 let deletedItems: DeletedItem[] = [];
 let currentFilter: "all" | "pinned" | "text" | "image" | "file" | "deleted" = "all";
-const countPinned = document.getElementById("count-pinned") as HTMLSpanElement;
-const countDeleted = document.getElementById("count-deleted") as HTMLSpanElement;
+const countPinned = getEl("count-pinned") as HTMLSpanElement;
+const countDeleted = getEl("count-deleted") as HTMLSpanElement;
 let selectedIndex = 0;
 let searchQuery = "";
 let isPinned = false;
@@ -29,10 +30,10 @@ let isPaused = false;
 const isPreviewWindow = getCurrentWindow().label === "preview";
 
 // DOM Elements
-const searchInput = document.getElementById("search-input") as HTMLInputElement;
-const searchClearBtn = document.getElementById("search-clear-btn") as HTMLButtonElement;
-const historyList = document.getElementById("history-list") as HTMLDivElement;
-const emptyState = document.getElementById("empty-state") as HTMLDivElement;
+const searchInput = getEl("search-input") as HTMLInputElement;
+const searchClearBtn = getEl("search-clear-btn") as HTMLButtonElement;
+const historyList = getEl("history-list") as HTMLDivElement;
+const emptyState = getEl("empty-state") as HTMLDivElement;
 const emptyTitle = emptyState.querySelector(".empty-title") as HTMLElement;
 const emptyDesc = emptyState.querySelector(".empty-desc") as HTMLElement;
 // The default copy lives in index.html; capture it once so a search can be
@@ -40,26 +41,26 @@ const emptyDesc = emptyState.querySelector(".empty-desc") as HTMLElement;
 const emptyTitleDefault = emptyTitle.textContent ?? "";
 const emptyDescDefault = emptyDesc.innerHTML;
 const filterTabs = document.querySelectorAll<HTMLButtonElement>(".filter-tab");
-const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
-const pinBtn = document.getElementById("pin-btn") as HTMLButtonElement;
-const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement;
-const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
-const settingsBtn = document.getElementById("settings-btn") as HTMLButtonElement;
-const settingsPage = document.getElementById("settings-page") as HTMLDivElement;
-const settingsBackBtn = document.getElementById("settings-back-btn") as HTMLButtonElement;
-const mainContent = document.getElementById("main-content") as HTMLDivElement;
-const settingMaxHistory = document.getElementById("setting-max-history") as HTMLInputElement;
-const settingDeleteTtl = document.getElementById("setting-delete-ttl") as HTMLInputElement;
-const shortcutPinItem = document.getElementById("shortcut-pin-item") as HTMLInputElement;
-const shortcutDelete = document.getElementById("shortcut-delete") as HTMLInputElement;
-const shortcutPause = document.getElementById("shortcut-pause") as HTMLInputElement;
-const shortcutSearch = document.getElementById("shortcut-search") as HTMLInputElement;
-const shortcutsReset = document.getElementById("shortcuts-reset") as HTMLButtonElement;
-const settingsSaveBtn = document.getElementById("settings-save-btn") as HTMLButtonElement;
-const countAll = document.getElementById("count-all") as HTMLSpanElement;
-const countText = document.getElementById("count-text") as HTMLSpanElement;
-const countImage = document.getElementById("count-image") as HTMLSpanElement;
-const countFile = document.getElementById("count-file") as HTMLSpanElement;
+const pauseBtn = getEl("pause-btn") as HTMLButtonElement;
+const pinBtn = getEl("pin-btn") as HTMLButtonElement;
+const clearBtn = getEl("clear-btn") as HTMLButtonElement;
+const closeBtn = getEl("close-btn") as HTMLButtonElement;
+const settingsBtn = getEl("settings-btn") as HTMLButtonElement;
+const settingsPage = getEl("settings-page") as HTMLDivElement;
+const settingsBackBtn = getEl("settings-back-btn") as HTMLButtonElement;
+const mainContent = getEl("main-content") as HTMLDivElement;
+const settingMaxHistory = getEl("setting-max-history") as HTMLInputElement;
+const settingDeleteTtl = getEl("setting-delete-ttl") as HTMLInputElement;
+const shortcutPinItem = getEl("shortcut-pin-item") as HTMLInputElement;
+const shortcutDelete = getEl("shortcut-delete") as HTMLInputElement;
+const shortcutPause = getEl("shortcut-pause") as HTMLInputElement;
+const shortcutSearch = getEl("shortcut-search") as HTMLInputElement;
+const shortcutsReset = getEl("shortcuts-reset") as HTMLButtonElement;
+const settingsSaveBtn = getEl("settings-save-btn") as HTMLButtonElement;
+const countAll = getEl("count-all") as HTMLSpanElement;
+const countText = getEl("count-text") as HTMLSpanElement;
+const countImage = getEl("count-image") as HTMLSpanElement;
+const countFile = getEl("count-file") as HTMLSpanElement;
 
 function formatTime(timestamp: number): string {
   const diffSec = Math.floor((Date.now() - timestamp) / 1000);
@@ -1222,7 +1223,7 @@ closeBtn.addEventListener("click", () => {
 
 // Resize grip — borderless windows are hard to grab at the edges,
 // so provide an explicit grip in the bottom-right corner.
-const resizeGrip = document.getElementById("resize-grip") as HTMLElement;
+const resizeGrip = getEl("resize-grip") as HTMLElement;
 resizeGrip.addEventListener("mousedown", (e) => {
   e.preventDefault();
   e.stopPropagation();
