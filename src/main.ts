@@ -755,13 +755,20 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
     e.stopPropagation();
-    if (searchInput) {
-      if (document.activeElement === searchInput) {
-        searchInput.blur();
-      } else {
-        searchInput.focus();
+    (async () => {
+      try {
+        currentSettingsCache = await invoke("get_settings");
+      } catch {}
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+      if (searchShortcut !== "Ctrl+F" && searchShortcut !== "Ctrl+f") return;
+      if (searchInput) {
+        if (document.activeElement === searchInput) {
+          searchInput.blur();
+        } else {
+          searchInput.focus();
+        }
       }
-    }
+    })();
     return false;
   }
   if ((e.ctrlKey || e.metaKey) && k === "p") {
@@ -770,20 +777,25 @@ window.addEventListener("keydown", (e) => {
     e.stopPropagation();
     (async () => {
       try {
-        isPaused = !isPaused;
-        await invoke("set_listening_paused", { paused: isPaused });
-        if (isPaused) {
-          pauseBtn.classList.add("active");
-          try { pauseBtn.innerHTML = "⏸"; } catch {}
-          pauseBtn.title = "Resume clipboard listening";
-          document.body.classList.add("paused");
-        } else {
-          pauseBtn.classList.remove("active");
-          try { pauseBtn.innerHTML = "⏯"; } catch {}
-          pauseBtn.title = "Pause clipboard listening";
-          document.body.classList.remove("paused");
-        }
+        currentSettingsCache = await invoke("get_settings");
       } catch {}
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+      if (pauseShortcut !== "Ctrl+P" && pauseShortcut !== "Ctrl+p") return;
+      isPaused = !isPaused;
+      try {
+        await invoke("set_listening_paused", { paused: isPaused });
+      } catch {}
+      if (isPaused) {
+        pauseBtn.classList.add("active");
+        try { pauseBtn.innerHTML = "⏸"; } catch {}
+        pauseBtn.title = "Resume clipboard listening";
+        document.body.classList.add("paused");
+      } else {
+        pauseBtn.classList.remove("active");
+        try { pauseBtn.innerHTML = "⏯"; } catch {}
+        pauseBtn.title = "Pause clipboard listening";
+        document.body.classList.remove("paused");
+      }
     })();
     return false;
   }
