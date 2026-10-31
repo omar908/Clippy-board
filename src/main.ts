@@ -434,6 +434,9 @@ async function selectItem(id: string) {
   }
 }
 
+import { deleteItem as apiDeleteItem } from "./api/clipboard";
+import { getSettings as apiGetSettings } from "./api/settings";
+
 async function deleteItem(id: string) {
   try {
     const item = history.find((i) => i.id === id);
@@ -443,12 +446,12 @@ async function deleteItem(id: string) {
     }
     let ttlSeconds = 60;
     try {
-      const settings: any = await invoke("get_settings");
+      const settings: any = await apiGetSettings();
       if (settings && typeof settings.delete_ttl_seconds === "number") {
         ttlSeconds = settings.delete_ttl_seconds;
       }
     } catch {}
-    await invoke("delete_item", { id, ttlSeconds });
+    await apiDeleteItem(id, ttlSeconds);
     history = history.filter((i) => i.id !== id);
     await loadDeleted();
     updateCounts();
