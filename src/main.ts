@@ -3,7 +3,7 @@ import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem, DeletedItem } from "./types";
 import { ShortcutManager } from "./shortcuts";
-import { togglePinAction, toggleListeningAction, deleteItemAction } from "./actions";
+import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import {
   initPreview,
@@ -811,19 +811,21 @@ shortcutManager.register({
   action: async (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
-    await toggleListeningAction(isPaused, (v) => { isPaused = v; }, (paused) => {
-      if (paused) {
-        pauseBtn.classList.add("active");
-        try { pauseBtn.innerHTML = "⏸"; } catch {}
-        pauseBtn.title = "Resume clipboard listening";
-        document.body.classList.add("paused");
-      } else {
-        pauseBtn.classList.remove("active");
-        try { pauseBtn.innerHTML = "⏯"; } catch {}
-        pauseBtn.title = "Pause clipboard listening";
-        document.body.classList.remove("paused");
-      }
-    });
+    isPaused = !isPaused;
+    try {
+      await api.setListeningPaused(isPaused);
+    } catch {}
+    if (isPaused) {
+      pauseBtn.classList.add("active");
+      try { pauseBtn.innerHTML = "⏸"; } catch {}
+      pauseBtn.title = "Resume clipboard listening";
+      document.body.classList.add("paused");
+    } else {
+      pauseBtn.classList.remove("active");
+      try { pauseBtn.innerHTML = "⏯"; } catch {}
+      pauseBtn.title = "Pause clipboard listening";
+      document.body.classList.remove("paused");
+    }
   },
   preventDefault: true,
   stopPropagation: true,
@@ -839,12 +841,21 @@ shortcutManager.register({
     } catch {}
     return currentSettingsCache?.shortcuts?.pinItem || "Alt+P";
   },
-  action: async () => {
+  action: async (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
     const target = filteredHistory[selectedIndex];
-    await togglePinAction(target as any, fetchInitialHistory, filterAndRender);
+    if (target) {
+      try {
+        await api.togglePin(target.id, !target.pinned);
+        await fetchInitialHistory();
+        filterAndRender();
+      } catch {}
+    }
   },
   preventDefault: true,
   stopPropagation: true,
+  stopImmediatePropagation: true,
 });
 
 shortcutManager.register({
