@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem, DeletedItem } from "./types";
 import { ShortcutManager } from "./shortcuts";
 import { togglePinAction, toggleListeningAction, deleteItemAction } from "./actions";
-// import * as api from "./api"; // will use in future phases
+import * as api from "./api";
 import {
   initPreview,
   previewSelectionChanged,
@@ -1132,7 +1132,7 @@ settingsSaveBtn.addEventListener("click", (ev) => {
   ev.stopPropagation();
   (async () => {
     try {
-      await invoke("set_interacting", { interacting: true } as any).catch(() => {}); // TODO: migrate to api
+      await api.setInteracting(true).catch(() => {});
       const settings = {
         max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
         delete_immediately: parseInt(settingDeleteTtl.value) === 0,
