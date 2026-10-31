@@ -766,10 +766,7 @@ window.addEventListener("keydown", (e) => {
       } catch {}
       const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
       if (searchShortcut === "Ctrl+F") {
-        if (searchInput) {
-          if (document.activeElement === searchInput) searchInput.blur();
-          else searchInput.focus();
-        }
+        shortcutManager.handle(new KeyboardEvent("keydown", { key: "f", ctrlKey: true }), true);
       }
     })();
     return false;
@@ -784,19 +781,7 @@ window.addEventListener("keydown", (e) => {
       } catch {}
       const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
       if (pauseShortcut === "Ctrl+P") {
-        isPaused = !isPaused;
-        try { await api.setListeningPaused(isPaused); } catch {}
-        if (isPaused) {
-          pauseBtn.classList.add("active");
-          try { pauseBtn.innerHTML = "⏸"; } catch {}
-          pauseBtn.title = "Resume clipboard listening";
-          document.body.classList.add("paused");
-        } else {
-          pauseBtn.classList.remove("active");
-          try { pauseBtn.innerHTML = "⏯"; } catch {}
-          pauseBtn.title = "Pause clipboard listening";
-          document.body.classList.remove("paused");
-        }
+        shortcutManager.handle(new KeyboardEvent("keydown", { key: "p", ctrlKey: true }), true);
       }
     })();
     return false;
