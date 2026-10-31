@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { togglePin as apiTogglePin, setListeningPaused } from "./api/clipboard";
 
 export type ClipboardItemLike = {
   id: string;
@@ -12,7 +12,7 @@ export async function togglePinAction(
 ) {
   if (!item) return;
   try {
-    await invoke("toggle_pin", { id: item.id, pinned: !item.pinned });
+    await apiTogglePin(item.id, !item.pinned);
     await fetchInitialHistory();
     filterAndRender();
   } catch {}
@@ -25,7 +25,7 @@ export async function toggleListeningAction(
 ) {
   const next = !isPaused;
   try {
-    await invoke("set_listening_paused", { paused: next });
+    await setListeningPaused(next);
   } catch {}
   setPaused(next);
   updateUI(next);
