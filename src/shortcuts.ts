@@ -63,6 +63,7 @@ export class ShortcutManager {
     let combo = normalizeCombo(e);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") combo = "Ctrl+F";
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") combo = "Ctrl+P";
+    if (e.altKey && e.key.toLowerCase() === "p") combo = "Alt+P";
     for (const reg of this.registrations) {
       const regCombo = typeof reg.combo === "function" ? await reg.combo() : reg.combo;
       if (regCombo !== combo) continue;
