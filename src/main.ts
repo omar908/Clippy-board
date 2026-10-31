@@ -6,6 +6,7 @@ import { ShortcutManager } from "./shortcuts";
 import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import { getEl } from "./ui/dom";
+import { formatTime, formatTTL } from "./utils/format";
 // import { renderList as renderListUI } from "./ui/render/list";
 import {
   initPreview,
@@ -61,25 +62,6 @@ const countAll = getEl("count-all") as HTMLSpanElement;
 const countText = getEl("count-text") as HTMLSpanElement;
 const countImage = getEl("count-image") as HTMLSpanElement;
 const countFile = getEl("count-file") as HTMLSpanElement;
-
-function formatTime(timestamp: number): string {
-  const diffSec = Math.floor((Date.now() - timestamp) / 1000);
-  if (diffSec < 5) return "just now";
-  if (diffSec < 60) return `${diffSec}s ago`;
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
-
-function formatTTL(deletedAt: number): string {
-  const remaining = Math.max(0, Math.floor((deletedAt - Date.now()) / 1000));
-  if (remaining < 60) return `${remaining}s left`;
-  const min = Math.floor(remaining / 60);
-  const sec = remaining % 60;
-  return `${min}m ${sec}s left`;
-}
 
 function updateCounts() {
   const total = history.length;
