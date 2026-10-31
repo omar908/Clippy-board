@@ -756,10 +756,49 @@ let currentSettingsCache: any = null;
 
 window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
-  if ((e.ctrlKey || e.metaKey) && (k === "f" || k === "p")) {
+  if ((e.ctrlKey || e.metaKey) && k === "f") {
     e.preventDefault();
     e.stopImmediatePropagation();
     e.stopPropagation();
+    (async () => {
+      try {
+        currentSettingsCache = await invoke("get_settings");
+      } catch {}
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+      if (searchShortcut === "Ctrl+F") {
+        if (searchInput) {
+          if (document.activeElement === searchInput) searchInput.blur();
+          else searchInput.focus();
+        }
+      }
+    })();
+    return false;
+  }
+  if ((e.ctrlKey || e.metaKey) && k === "p") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    (async () => {
+      try {
+        currentSettingsCache = await invoke("get_settings");
+      } catch {}
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+      if (pauseShortcut === "Ctrl+P") {
+        isPaused = !isPaused;
+        try { await api.setListeningPaused(isPaused); } catch {}
+        if (isPaused) {
+          pauseBtn.classList.add("active");
+          try { pauseBtn.innerHTML = "⏸"; } catch {}
+          pauseBtn.title = "Resume clipboard listening";
+          document.body.classList.add("paused");
+        } else {
+          pauseBtn.classList.remove("active");
+          try { pauseBtn.innerHTML = "⏯"; } catch {}
+          pauseBtn.title = "Pause clipboard listening";
+          document.body.classList.remove("paused");
+        }
+      }
+    })();
     return false;
   }
 }, true);
