@@ -2,6 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem, DeletedItem } from "./types";
+import { ShortcutManager } from "./shortcuts";
+import { deleteItemAction } from "./actions";
+import * as api from "./api";
 import {
   initPreview,
   previewSelectionChanged,
@@ -431,6 +434,9 @@ async function selectItem(id: string) {
   }
 }
 
+import { deleteItem as apiDeleteItem } from "./api/clipboard";
+import { getSettings as apiGetSettings } from "./api/settings";
+
 async function deleteItem(id: string) {
   try {
     const item = history.find((i) => i.id === id);
@@ -440,12 +446,12 @@ async function deleteItem(id: string) {
     }
     let ttlSeconds = 60;
     try {
-      const settings: any = await invoke("get_settings");
+      const settings: any = await apiGetSettings();
       if (settings && typeof settings.delete_ttl_seconds === "number") {
         ttlSeconds = settings.delete_ttl_seconds;
       }
     } catch {}
-    await invoke("delete_item", { id, ttlSeconds });
+    await apiDeleteItem(id, ttlSeconds);
     history = history.filter((i) => i.id !== id);
     await loadDeleted();
     updateCounts();
@@ -754,7 +760,55 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
     e.stopPropagation();
-    // Try to focus search
+    (async () => {
+      try {
+        currentSettingsCache = await invoke("get_settings");
+      } catch {}
+      const searchShortcut = currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+      if (searchShortcut === "Ctrl+F") {
+        shortcutManager.handle(new KeyboardEvent("keydown", { key: "f", ctrlKey: true }), true);
+      }
+    })();
+    return false;
+  }
+  if ((e.ctrlKey || e.metaKey) && k === "p") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    (async () => {
+      try {
+        currentSettingsCache = await invoke("get_settings");
+      } catch {}
+      const pauseShortcut = currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+      if (pauseShortcut === "Ctrl+P") {
+        shortcutManager.handle(new KeyboardEvent("keydown", { key: "p", ctrlKey: true }), true);
+      }
+    })();
+    return false;
+  }
+}, true);
+
+const shortcutManager = new ShortcutManager({
+  isSettingsOpen: () => !!(settingsPage && settingsPage.style.display !== "none"),
+  isSettingsInputActive: () => {
+    const el = document.activeElement as HTMLElement | null;
+    return !!(el && el.classList.contains("settings-input"));
+  },
+  isSearchInputActive: () => document.activeElement === searchInput,
+  getActiveElement: () => document.activeElement as HTMLElement | null,
+});
+
+shortcutManager.register({
+  id: "search-focus",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.search || "Ctrl+F";
+  },
+  action: (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
     if (searchInput) {
       if (document.activeElement === searchInput) {
         searchInput.blur();
@@ -762,33 +816,87 @@ window.addEventListener("keydown", (e) => {
         searchInput.focus();
       }
     }
-    return false;
-  }
-  if ((e.ctrlKey || e.metaKey) && k === "p") {
+  },
+  allowInSearchInput: true,
+  preventDefault: true,
+  stopPropagation: true,
+  stopImmediatePropagation: true,
+  capture: true,
+});
+
+shortcutManager.register({
+  id: "pause-toggle",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.pause || "Ctrl+P";
+  },
+  action: async (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
-    e.stopPropagation();
-    // Toggle pause
-    (async () => {
+    isPaused = !isPaused;
+    try {
+      await api.setListeningPaused(isPaused);
+    } catch {}
+    if (isPaused) {
+      pauseBtn.classList.add("active");
+      try { pauseBtn.innerHTML = "⏸"; } catch {}
+      pauseBtn.title = "Resume clipboard listening";
+      document.body.classList.add("paused");
+    } else {
+      pauseBtn.classList.remove("active");
+      try { pauseBtn.innerHTML = "⏯"; } catch {}
+      pauseBtn.title = "Pause clipboard listening";
+      document.body.classList.remove("paused");
+    }
+  },
+  preventDefault: true,
+  stopPropagation: true,
+  stopImmediatePropagation: true,
+  capture: true,
+});
+
+shortcutManager.register({
+  id: "pin-toggle",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.pinItem || "Alt+P";
+  },
+  action: async (e) => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const target = filteredHistory[selectedIndex];
+    if (target) {
       try {
-        isPaused = !isPaused;
-        await invoke("set_listening_paused", { paused: isPaused });
-        if (isPaused) {
-          pauseBtn.classList.add("active");
-          try { pauseBtn.innerHTML = "⏸"; } catch {}
-          pauseBtn.title = "Resume clipboard listening";
-          document.body.classList.add("paused");
-        } else {
-          pauseBtn.classList.remove("active");
-          try { pauseBtn.innerHTML = "⏯"; } catch {}
-          pauseBtn.title = "Pause clipboard listening";
-          document.body.classList.remove("paused");
-        }
+        await api.togglePin(target.id, !target.pinned);
+        await fetchInitialHistory();
+        filterAndRender();
       } catch {}
-    })();
-    return false;
-  }
-}, true);
+    }
+  },
+  preventDefault: true,
+  stopPropagation: true,
+  stopImmediatePropagation: true,
+});
+
+shortcutManager.register({
+  id: "delete-item",
+  combo: async () => {
+    try {
+      currentSettingsCache = await invoke("get_settings");
+    } catch {}
+    return currentSettingsCache?.shortcuts?.delete || "Delete";
+  },
+  action: async () => {
+    const target = filteredHistory[selectedIndex];
+    await deleteItemAction(target as any, deleteItem);
+  },
+  preventDefault: true,
+  stopPropagation: true,
+});
 
 window.addEventListener("keydown", (e) => {
   const navKey =
@@ -1017,7 +1125,7 @@ settingsSaveBtn.addEventListener("click", (ev) => {
   ev.stopPropagation();
   (async () => {
     try {
-      await invoke("set_interacting", { interacting: true } as any).catch(() => {});
+      await api.setInteracting(true).catch(() => {});
       const settings = {
         max_history: Math.min(10000, Math.max(1, parseInt(settingMaxHistory.value) || 100)),
         delete_immediately: parseInt(settingDeleteTtl.value) === 0,
