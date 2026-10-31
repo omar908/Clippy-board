@@ -5,6 +5,7 @@ import type { ClipboardItem, DeletedItem } from "./types";
 import { ShortcutManager } from "./shortcuts";
 import { deleteItemAction } from "./actions";
 import * as api from "./api";
+// import { renderList as renderListUI } from "./ui/render/list";
 import {
   initPreview,
   previewSelectionChanged,
