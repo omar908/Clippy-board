@@ -3,6 +3,7 @@ import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem, DeletedItem } from "./types";
 import { ShortcutManager } from "./shortcuts";
+import { togglePinAction, toggleListeningAction, deleteItemAction } from "./actions";
 import {
   initPreview,
   previewSelectionChanged,
@@ -848,21 +849,19 @@ shortcutManager.register({
   action: async (e) => {
     e.preventDefault();
     e.stopImmediatePropagation();
-    isPaused = !isPaused;
-    try {
-      await invoke("set_listening_paused", { paused: isPaused });
-    } catch {}
-    if (isPaused) {
-      pauseBtn.classList.add("active");
-      try { pauseBtn.innerHTML = "⏸"; } catch {}
-      pauseBtn.title = "Resume clipboard listening";
-      document.body.classList.add("paused");
-    } else {
-      pauseBtn.classList.remove("active");
-      try { pauseBtn.innerHTML = "⏯"; } catch {}
-      pauseBtn.title = "Pause clipboard listening";
-      document.body.classList.remove("paused");
-    }
+    await toggleListeningAction(isPaused, (v) => { isPaused = v; }, (paused) => {
+      if (paused) {
+        pauseBtn.classList.add("active");
+        try { pauseBtn.innerHTML = "⏸"; } catch {}
+        pauseBtn.title = "Resume clipboard listening";
+        document.body.classList.add("paused");
+      } else {
+        pauseBtn.classList.remove("active");
+        try { pauseBtn.innerHTML = "⏯"; } catch {}
+        pauseBtn.title = "Pause clipboard listening";
+        document.body.classList.remove("paused");
+      }
+    });
   },
   preventDefault: true,
   stopPropagation: true,
@@ -880,13 +879,7 @@ shortcutManager.register({
   },
   action: async () => {
     const target = filteredHistory[selectedIndex];
-    if (target) {
-      try {
-        await invoke("toggle_pin", { id: target.id, pinned: !target.pinned });
-        await fetchInitialHistory();
-        filterAndRender();
-      } catch {}
-    }
+    await togglePinAction(target as any, fetchInitialHistory, filterAndRender);
   },
   preventDefault: true,
   stopPropagation: true,
@@ -900,11 +893,9 @@ shortcutManager.register({
     } catch {}
     return currentSettingsCache?.shortcuts?.delete || "Delete";
   },
-  action: () => {
+  action: async () => {
     const target = filteredHistory[selectedIndex];
-    if (target && !target.pinned) {
-      deleteItem(target.id);
-    }
+    await deleteItemAction(target as any, deleteItem);
   },
   preventDefault: true,
   stopPropagation: true,
