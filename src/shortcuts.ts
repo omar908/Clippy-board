@@ -51,16 +51,18 @@ export class ShortcutManager {
 
   constructor(context: ShortcutContext) {
     this.context = context;
-    window.addEventListener("keydown", (e) => {
-      const k = e.key.toLowerCase();
-      if ((e.ctrlKey || e.metaKey) && (k === "p" || k === "f")) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        e.stopPropagation();
-      }
-      this.handle(e, true);
-    }, true);
-    window.addEventListener("keydown", (e) => this.handle(e, false), false);
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("keydown", (e) => {
+        const k = e.key.toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && (k === "p" || k === "f")) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          e.stopPropagation();
+        }
+        this.handle(e, true);
+      }, true);
+      window.addEventListener("keydown", (e) => this.handle(e, false), false);
+    }
   }
 
   register(reg: ShortcutRegistration) {
