@@ -7,6 +7,7 @@ import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import { getEl } from "./ui/dom";
 import { formatTime, formatTTL } from "./utils/format";
+// import { createItemCard, renderItemMeta, renderTime, renderPinButton, renderActions } from "./ui/render/item";
 // import { renderEmptyState } from "./ui/render/empty";
 // import { updateCountsUI } from "./ui/render/header";
 // import { renderList as renderListUI } from "./ui/render/list";
