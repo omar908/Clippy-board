@@ -7,6 +7,8 @@ import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import { getEl } from "./ui/dom";
 import { formatTime, formatTTL } from "./utils/format";
+// import { renderTabs } from "./ui/render/tabs";
+// import { bindTabEvents } from "./ui/events";
 // import { createItemCard, renderItemMeta, renderTime, renderPinButton, renderActions } from "./ui/render/item";
 // import { renderTextContent, renderImageContent, renderFileContent } from "./ui/render/content";
 // import { renderEmptyState } from "./ui/render/empty";
