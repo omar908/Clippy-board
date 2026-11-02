@@ -1,3 +1,5 @@
+import { normalizeShortcut, shortcutFromEvent } from "./shortcut-combo";
+
 export type ShortcutContext = {
   isSettingsOpen: () => boolean;
   isSettingsInputActive: () => boolean;
@@ -5,108 +7,112 @@ export type ShortcutContext = {
   getActiveElement: () => HTMLElement | null;
 };
 
-export type ShortcutAction = (e: KeyboardEvent) => void | Promise<void>;
-
 export type ShortcutRegistration = {
   id: string;
-  combo: string | (() => string | Promise<string>);
-  action: ShortcutAction;
+  combo: string | (() => string);
+  action: (event: KeyboardEvent) => unknown;
+  when?: () => boolean;
+  priority?: number;
   preventDefault?: boolean;
   stopPropagation?: boolean;
   stopImmediatePropagation?: boolean;
-  capture?: boolean;
   allowInSettingsInput?: boolean;
   allowInSearchInput?: boolean;
   allowWhenTyping?: boolean;
 };
-
-function normalizeCombo(e: KeyboardEvent): string {
-  const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Ctrl");
-  if (e.metaKey) parts.push("Meta");
-  if (e.altKey) parts.push("Alt");
-  if (e.shiftKey) parts.push("Shift");
-  let key = e.key;
-  if (key === " ") key = "Space";
-  if (key === "Enter") key = "Enter";
-  if (key === "Escape") key = "Escape";
-  if (key === "Delete") key = "Delete";
-  if (key === "Backspace") key = "Backspace";
-  if (key === "ArrowUp") key = "ArrowUp";
-  if (key === "ArrowDown") key = "ArrowDown";
-  if (key === "ArrowLeft") key = "ArrowLeft";
-  if (key === "ArrowRight") key = "ArrowRight";
-  if (key === "Tab") key = "Tab";
-  if (key.length === 1) key = key.toUpperCase();
-  if (key === "Control" || key === "Meta" || key === "Alt" || key === "Shift") {
-    return parts.join("+");
-  }
-  parts.push(key);
-  return parts.join("+");
-}
+export type ShortcutBindings = Record<string, string | null>;
 
 export class ShortcutManager {
-  private registrations: ShortcutRegistration[] = [];
-  private context: ShortcutContext;
+  private registrations = new Map<string, ShortcutRegistration>();
+  private bindings: ShortcutBindings = {};
+  private scopes: { bindings: ShortcutBindings }[] = [];
+  private handled = new WeakSet<KeyboardEvent>();
+  private disposed = false;
+  private listener = (event: KeyboardEvent) => { this.handle(event); };
 
-  constructor(context: ShortcutContext) {
-    this.context = context;
-    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      window.addEventListener("keydown", (e) => {
-        const k = e.key.toLowerCase();
-        if ((e.ctrlKey || e.metaKey) && (k === "p" || k === "f")) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          e.stopPropagation();
-        }
-        this.handle(e, true);
-      }, true);
-      window.addEventListener("keydown", (e) => this.handle(e, false), false);
+  constructor(private context: ShortcutContext,
+    private onError: (error: unknown) => void = error => console.error("Shortcut failed:", error)) {
+    if (typeof window !== "undefined") window.addEventListener("keydown", this.listener, true);
+  }
+
+  register(registration: ShortcutRegistration) {
+    // Resolve only synchronous, cached bindings during key dispatch.
+    if (typeof registration.combo === "string") normalizeShortcut(registration.combo);
+    this.registrations.delete(registration.id);
+    this.registrations.set(registration.id, registration);
+    return () => {
+      if (this.registrations.get(registration.id) === registration) this.registrations.delete(registration.id);
+    };
+  }
+
+  setBindings(bindings: ShortcutBindings) {
+    this.bindings = this.normalizeBindings(bindings);
+  }
+
+  overrideBindings(bindings: ShortcutBindings) {
+    const scope = { bindings: this.normalizeBindings(bindings) };
+    this.scopes.push(scope);
+    return () => { this.scopes = this.scopes.filter(value => value !== scope); };
+  }
+
+  private normalizeBindings(bindings: ShortcutBindings) {
+    return Object.fromEntries(Object.entries(bindings).map(([id, combo]) => [id, combo ? normalizeShortcut(combo) : null]));
+  }
+
+  private effective(registration: ShortcutRegistration) {
+    for (let index = this.scopes.length - 1;index >= 0;index--) {
+      if (Object.prototype.hasOwnProperty.call(this.scopes[index].bindings, registration.id)) {
+        return { combo: this.scopes[index].bindings[registration.id], layer: 2 + index };
+      }
     }
+    if (Object.prototype.hasOwnProperty.call(this.bindings, registration.id)) return { combo: this.bindings[registration.id], layer: 1 };
+    const combo = typeof registration.combo === "function" ? registration.combo() : registration.combo;
+    return { combo: normalizeShortcut(combo), layer: 0 };
   }
 
-  register(reg: ShortcutRegistration) {
-    this.registrations.push(reg);
-  }
-
-  async handle(e: KeyboardEvent, capture: boolean) {
-    let combo = normalizeCombo(e);
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") combo = "Ctrl+F";
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") combo = "Ctrl+P";
-    if (e.altKey && e.key.toLowerCase() === "p") combo = "Alt+P";
-    for (const reg of this.registrations) {
-      const regCombo = typeof reg.combo === "function" ? await reg.combo() : reg.combo;
-      if (regCombo !== combo) continue;
-      const isSettingsOpen = this.context.isSettingsOpen();
-      const isSettingsInputActive = this.context.isSettingsInputActive();
-      const isSearchInputActive = this.context.isSearchInputActive();
-      const activeEl = this.context.getActiveElement();
-      if (isSettingsOpen && isSettingsInputActive && !reg.allowInSettingsInput) {
-        continue;
-      }
-      if (isSearchInputActive && !reg.allowInSearchInput) {
-        continue;
-      }
-      if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA") && !reg.allowWhenTyping && !reg.allowInSearchInput && !reg.allowInSettingsInput) {
-        if (isSearchInputActive) continue;
-        if (isSettingsInputActive) continue;
-        continue;
-      }
-      if (reg.capture !== undefined && reg.capture !== capture) continue;
-      if (reg.preventDefault !== false) {
-        e.preventDefault();
-        (e as any).returnValue = false;
-      }
-      if (reg.stopPropagation) e.stopPropagation();
-      if (reg.stopImmediatePropagation) e.stopImmediatePropagation();
-      try {
-        await reg.action(e);
-      } catch {}
-      break;
+  getConflicts() {
+    const combinations = new Map<string, string[]>();
+    for (const registration of this.registrations.values()) {
+      const { combo } = this.effective(registration);
+      if (combo) combinations.set(combo, [...(combinations.get(combo) ?? []), registration.id]);
     }
+    return [...combinations].filter(([, ids]) => ids.length > 1).map(([combo, ids]) => ({ combo, ids }));
   }
 
-  update() {
-    // placeholder for future dynamic updates
+  private allowed(registration: ShortcutRegistration) {
+    if (registration.when && !registration.when()) return false;
+    if (this.context.isSettingsInputActive()) return Boolean(registration.allowInSettingsInput);
+    if (this.context.isSearchInputActive()) return Boolean(registration.allowInSearchInput || registration.allowWhenTyping);
+    const active = this.context.getActiveElement();
+    const typing = active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable);
+    return !typing || Boolean(registration.allowWhenTyping);
+  }
+
+  handle(event: KeyboardEvent) {
+    if (this.disposed || this.handled.has(event) || event.defaultPrevented || event.isComposing) return false;
+    const combo = shortcutFromEvent(event);
+    if (!combo) return false;
+    const matches = [...this.registrations.values()].map((registration, index) => ({
+      registration, index, ...this.effective(registration),
+    })).filter(value => value.combo === combo && this.allowed(value.registration));
+    // Temporary scopes override saved bindings, which override defaults. Within
+    // a layer, explicit priority then the latest registration breaks ties.
+    matches.sort((a, b) => b.layer - a.layer || (b.registration.priority ?? 0) - (a.registration.priority ?? 0) || b.index - a.index);
+    const match = matches[0]?.registration;
+    if (!match) return false;
+    this.handled.add(event);
+    if (match.preventDefault !== false) event.preventDefault();
+    if (match.stopPropagation) event.stopPropagation();
+    if (match.stopImmediatePropagation) event.stopImmediatePropagation();
+    try { Promise.resolve(match.action(event)).catch(this.onError); }
+    catch (error) { this.onError(error); }
+    return true;
+  }
+
+  dispose() {
+    this.disposed = true;
+    if (typeof window !== "undefined") window.removeEventListener?.("keydown", this.listener, true);
+    this.registrations.clear();
+    this.scopes = [];
   }
 }

@@ -12,6 +12,10 @@ Write an ADR when a decision is:
 
 Skip ADRs for routine changes (bug fixes, styling, small refactors) — the commit log is enough for those.
 
+For implementation details and extension instructions, link a
+[Technical Design Document](../tdd/README.md). ADRs record decision rationale;
+TDDs describe the current design and how to work with it.
+
 ## How to write one
 
 1. Copy the template below into `NNNN-short-title.md` (sequential number, e.g. `0004-...`).
@@ -66,3 +70,4 @@ this decision imposes on future work.
 | [0005](0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) | Superseded by ADR-0007 |
 | [0006](0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize | Accepted |
 | [0007](0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate window, docking inside when there is no room | Accepted |
+| [0008](0008-shared-commands-and-shortcut-router.md) | Shared commands and a single shortcut router | Accepted |
