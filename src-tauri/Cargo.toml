@@ -1,6 +1,6 @@
 [package]
 name = "clippy-app"
-version = "0.1.0"
+version = "0.2.0"
 description = "Clippy-board - Lightweight Windows Clipboard Manager"
 authors = ["Omar"]
 edition = "2021"

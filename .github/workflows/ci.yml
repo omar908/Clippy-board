@@ -46,6 +46,11 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
+      - name: Validate release versions and policy
+        run: |
+          node scripts/release-plan.mjs --check
+          npm run test:release
+
       - name: Run frontend tests
         run: npm test
 
@@ -72,12 +77,35 @@ jobs:
           path: src-tauri/target/smoke-logs/
           if-no-files-found: ignore
 
-  release:
-    # Release builds only for version tags or a manual run, never for ordinary
-    # pushes/PRs. CI still runs the full test + smoke job in those cases.
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+  release_plan:
     needs: test
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      commit: ${{ steps.plan.outputs.commit }}
+      build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Plan release for the tested commit
+        id: plan
+        run: node scripts/release-plan.mjs
+
+  release:
+    # A version bump merged into main tags/releases this tested commit. Tag and
+    # release creation stay in one run: GITHUB_TOKEN tags do not trigger CI again.
+    needs: [test, release_plan]
+    if: needs.release_plan.outputs.build == 'true'
     runs-on: windows-latest
+    concurrency:
+      group: release-${{ needs.release_plan.outputs.tag }}
+      cancel-in-progress: false
     permissions:
       contents: write
     defaults:
@@ -123,12 +151,16 @@ jobs:
           if-no-files-found: ignore
 
       - name: Publish GitHub Release
-        # Only for tag pushes; manual runs just produce the artifact above.
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        # The release API creates the tag at the exact tested commit if absent.
+        # Manual runs still only produce build artifacts.
+        if: needs.release_plan.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ needs.release_plan.outputs.tag }}
+          target_commitish: ${{ needs.release_plan.outputs.commit }}
           files: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
-          draft: true
+          draft: false
+          fail_on_unmatched_files: true
           generate_release_notes: true
