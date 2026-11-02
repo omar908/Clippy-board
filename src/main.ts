@@ -6,13 +6,12 @@ import { ShortcutManager } from "./shortcuts";
 import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import { getEl } from "./ui/dom";
-import { formatTime, formatTTL } from "./utils/format";
 import { renderTabs } from "./ui/render/tabs";
 import { bindTabEvents, bindSettingsToggle } from "./ui/events";
-// import { createItemCard, renderItemMeta, renderTime, renderPinButton, renderActions } from "./ui/render/item";
-// import { renderTextContent, renderImageContent, renderFileContent } from "./ui/render/content";
-// import { renderEmptyState } from "./ui/render/empty";
-// import { updateCountsUI } from "./ui/render/header";
+import { createItemCard, renderItemMeta, renderTime, renderActions } from "./ui/render/item";
+import { renderTextContent, renderImageContent, renderFileContent } from "./ui/render/content";
+import { renderEmptyState } from "./ui/render/empty";
+import { updateCountsUI } from "./ui/render/header";
 // import { renderList as renderListUI } from "./ui/render/list";
 import {
   initPreview,
@@ -70,18 +69,10 @@ const countImage = getEl("count-image") as HTMLSpanElement;
 const countFile = getEl("count-file") as HTMLSpanElement;
 
 function updateCounts() {
-  const total = history.length;
-  const pinned = history.filter((i: any) => i.pinned).length;
-  const text = history.filter((i) => i.type === "text").length;
-  const img = history.filter((i) => i.type === "image").length;
-  const file = history.filter((i) => i.type === "file").length;
-
-  if (countAll) countAll.textContent = total.toString();
-  if (countPinned) countPinned.textContent = pinned.toString();
-  if (countText) countText.textContent = text.toString();
-  if (countImage) countImage.textContent = img.toString();
-  if (countFile) countFile.textContent = file.toString();
-  if (countDeleted) countDeleted.textContent = deletedItems.length.toString();
+  updateCountsUI({
+    all: countAll, pinned: countPinned, text: countText,
+    image: countImage, file: countFile, deleted: countDeleted,
+  }, history, deletedItems.length);
 }
 
 function filterAndRender() {
@@ -172,17 +163,10 @@ function renderList() {
   console.log("Rendering list, currentFilter:", currentFilter, "filteredHistory length:", filteredHistory.length);
   if (filteredHistory.length === 0) {
     historyList.innerHTML = "";
-    emptyState.style.display = "flex";
-    if (searchQuery) {
-      emptyTitle.textContent = "No matches found";
-      emptyDesc.textContent = `No items found matching "${searchQuery}"`;
-    } else if (currentFilter === "deleted") {
-      emptyTitle.textContent = "No deleted items";
-      emptyDesc.textContent = "Items you delete will appear here temporarily until they expire.";
-    } else {
-      emptyTitle.textContent = emptyTitleDefault;
-      emptyDesc.innerHTML = emptyDescDefault;
-    }
+    renderEmptyState(emptyState, emptyTitle, emptyDesc, {
+      hasSearch: Boolean(searchQuery), searchQuery, currentFilter,
+      emptyTitleDefault, emptyDescDefault,
+    });
     return;
   }
 
@@ -191,207 +175,84 @@ function renderList() {
 
   filteredHistory.forEach((item: any, index) => {
     try {
-    const actualItem = item;
-    // Handle flattened structure from backend - DeletedItem has type at top level
-    const type = actualItem.type;
-    let payload: any = {};
-    if (actualItem.payload !== undefined) {
-      payload = actualItem.payload;
-    } else {
-      if (type === "text") {
-        payload = { text: actualItem.text, preview: actualItem.preview, char_count: actualItem.char_count, line_count: actualItem.line_count };
-      } else if (type === "image") {
-        payload = { data_url: actualItem.data_url, thumbnail: actualItem.thumbnail, width: actualItem.width, height: actualItem.height, byte_size: actualItem.byte_size };
-      } else if (type === "file") {
-        payload = { paths: actualItem.paths, count: actualItem.count, preview: actualItem.preview };
+      const actualItem = item;
+      const type = actualItem.type;
+      const card = createItemCard(actualItem, index, selectedIndex);
+
+      // Meta row
+      const headerRow = document.createElement("div");
+      headerRow.className = "item-header";
+
+      const metaLeft = document.createElement("div");
+      metaLeft.className = "item-meta-left";
+
+      const badge = document.createElement("span");
+      badge.className = `item-badge badge-${type}`;
+      badge.textContent = type;
+
+      const time = document.createElement("span");
+      time.className = "item-time";
+      renderTime(actualItem, time, currentFilter);
+
+      if (actualItem.pinned) {
+        const pinBadge = document.createElement("span");
+        pinBadge.className = "item-pin-badge";
+        pinBadge.textContent = "📌";
+        pinBadge.title = "Pinned (locked)";
+        metaLeft.appendChild(pinBadge);
       }
-    }
-    const card = document.createElement("div");
-    card.className = `history-item ${index === selectedIndex ? "selected" : ""} ${actualItem.pinned ? "pinned" : ""}`;
-    card.setAttribute("data-id", actualItem.id);
 
-    // Meta row
-    const headerRow = document.createElement("div");
-    headerRow.className = "item-header";
+      const details = document.createElement("span");
+      details.className = "item-details";
 
-    const metaLeft = document.createElement("div");
-    metaLeft.className = "item-meta-left";
+      renderItemMeta(actualItem, details);
 
-    const badge = document.createElement("span");
-    badge.className = `item-badge badge-${type}`;
-    badge.textContent = type;
-
-    const time = document.createElement("span");
-    time.className = "item-time";
-    if (currentFilter === "deleted") {
-      time.textContent = formatTTL(actualItem.deleted_at || Date.now() + 60000);
-    } else {
-      time.textContent = formatTime(actualItem.timestamp);
-    }
-
-    if (actualItem.pinned) {
-      const pinBadge = document.createElement("span");
-      pinBadge.className = "item-pin-badge";
-      pinBadge.textContent = "📌";
-      pinBadge.title = "Pinned (locked)";
-      metaLeft.appendChild(pinBadge);
-    }
-
-    const details = document.createElement("span");
-    details.className = "item-details";
-
-    if (type === "text") {
-      details.textContent = `${payload.char_count} chars • ${payload.line_count} line${payload.line_count > 1 ? "s" : ""}`;
-    } else if (type === "image") {
-      const kb = Math.round(payload.byte_size / 1024);
-      details.textContent = `${payload.width}×${payload.height}px • ${kb} KB`;
-    } else if (type === "file") {
-      details.textContent = `${payload.count} file${payload.count > 1 ? "s" : ""}`;
-    }
-
-    metaLeft.appendChild(badge);
-    metaLeft.appendChild(time);
-    if (type === "text" || type === "image" || type === "file") {
-      metaLeft.appendChild(details);
-    }
-
-    const actions = document.createElement("div");
-    actions.className = "item-actions";
-
-    if (currentFilter === "deleted") {
-      // Undo button
-      const undoBtn = document.createElement("button");
-      undoBtn.className = "item-action-btn btn-undo";
-      undoBtn.title = "Undo - restore to history";
-      undoBtn.setAttribute("aria-label", "Undo restore");
-      undoBtn.innerHTML = "↶";
-      undoBtn.onclick = (e) => {
-        e.stopPropagation();
-        restoreFromDeleted(actualItem.id);
-      };
-      // Permanent delete button
-      const permDeleteBtn = document.createElement("button");
-      permDeleteBtn.className = "item-action-btn btn-delete";
-      permDeleteBtn.title = "Delete permanently";
-      permDeleteBtn.setAttribute("aria-label", "Delete permanently");
-      permDeleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M2.5 4.5h11" />
-        <path d="M6 4.5V3.25h4V4.5" />
-        <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
-        <path d="M6.6 7.25v4M9.4 7.25v4" />
-      </svg>`;
-      permDeleteBtn.onclick = (e) => {
-        e.stopPropagation();
-        deletePermanentlyFromDeleted(actualItem.id);
-      };
-      actions.appendChild(undoBtn);
-      actions.appendChild(permDeleteBtn);
-    } else {
-      // Pin/Unpin button
-      const pinBtnItem = document.createElement("button");
-      pinBtnItem.className = "item-action-btn btn-pin";
-      pinBtnItem.title = (item as any).pinned ? "Unpin (unlock)" : "Pin (lock)";
-      pinBtnItem.setAttribute("aria-label", (item as any).pinned ? "Unpin" : "Pin");
-      pinBtnItem.innerHTML = (item as any).pinned ? "📌" : "📍";
-      pinBtnItem.onclick = (e) => {
-        e.stopPropagation();
-        togglePin(item.id);
-      };
-
-      // Delete button (disabled for pinned items)
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "item-action-btn btn-delete";
-      if ((item as any).pinned) {
-        deleteBtn.disabled = true;
-        deleteBtn.title = "Unpin to delete";
-        deleteBtn.setAttribute("aria-label", "Pinned - unpin to delete");
-      } else {
-        deleteBtn.title = "Delete from history";
-        deleteBtn.setAttribute("aria-label", "Delete from history");
+      metaLeft.appendChild(badge);
+      metaLeft.appendChild(time);
+      if (type === "text" || type === "image" || type === "file") {
+        metaLeft.appendChild(details);
       }
-      deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-        stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M2.5 4.5h11" />
-        <path d="M6 4.5V3.25h4V4.5" />
-        <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
-        <path d="M6.6 7.25v4M9.4 7.25v4" />
-      </svg>`;
-      deleteBtn.onclick = (e) => {
-        e.stopPropagation();
-        if ((item as any).pinned) return;
-        deleteItem(item.id);
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      renderActions(actualItem, actions, currentFilter,
+        () => togglePin(actualItem.id),
+        () => deleteItem(actualItem.id),
+        () => restoreFromDeleted(actualItem.id),
+        () => deletePermanentlyFromDeleted(actualItem.id));
+
+      headerRow.appendChild(metaLeft);
+      headerRow.appendChild(actions);
+      card.appendChild(headerRow);
+
+      // Content body
+      if (type === "text" || type === "image" || type === "file") {
+        const content = document.createElement("div");
+        content.className = `item-content-${type}`;
+        if (type === "text") renderTextContent(actualItem, content);
+        else if (type === "image") renderImageContent(actualItem, content);
+        else renderFileContent(actualItem, content);
+        card.appendChild(content);
+      }
+
+      card.onclick = () => {
+        if (currentFilter === "deleted") {
+          return;
+        }
+        selectItem(actualItem.id);
       };
 
-      actions.appendChild(pinBtnItem);
-      actions.appendChild(deleteBtn);
-    }
-
-    headerRow.appendChild(metaLeft);
-    headerRow.appendChild(actions);
-    card.appendChild(headerRow);
-
-    // Content body
-    if (type === "text") {
-      const textPreview = document.createElement("div");
-      textPreview.className = "item-content-text";
-      textPreview.textContent = payload.preview || payload.text || "";
-      card.appendChild(textPreview);
-    } else if (type === "image") {
-      const imgContainer = document.createElement("div");
-      imgContainer.className = "item-content-image";
-      const img = document.createElement("img");
-      // Prefer the pre-rendered thumbnail; full data_url is the fallback
-      // (and what restore uses — that path stays Rust-side).
-      img.src = payload.thumbnail || payload.data_url || "";
-      img.alt = "Clipboard image preview";
-      img.loading = "lazy";
-      imgContainer.appendChild(img);
-      card.appendChild(imgContainer);
-    } else if (type === "file") {
-      const fileContainer = document.createElement("div");
-      fileContainer.className = "item-content-file";
-
-      (payload.paths || []).slice(0, 3).forEach((p: string) => {
-        const fileRow = document.createElement("div");
-        fileRow.className = "file-row";
-        const icon = document.createElement("span");
-        icon.className = "file-icon";
-        icon.textContent = "📄";
-        const pathSpan = document.createElement("span");
-        pathSpan.className = "file-path";
-        pathSpan.textContent = p;
-        fileRow.appendChild(icon);
-        fileRow.appendChild(pathSpan);
-        fileContainer.appendChild(fileRow);
+      // Hover is one of the two traversals of the same flow: it moves the
+      // selection to the card under the cursor. While an anchor is set
+      // (keyboard takeover, or right after a copy re-rendered the list under
+      // a parked cursor), only a pointer that actually moved re-engages hover.
+      card.addEventListener("mouseenter", (e) => {
+        if (hoverResizeGuard) return;
+        hoverCard(actualItem.id, e.clientX, e.clientY);
       });
 
-      if ((payload.paths || []).length > 3) {
-        const moreSpan = document.createElement("span");
-        moreSpan.className = "file-path";
-        moreSpan.textContent = `...and ${(payload.paths || []).length - 3} more files`;
-        fileContainer.appendChild(moreSpan);
-      }
-      card.appendChild(fileContainer);
-    }
-
-    card.onclick = () => {
-      if (currentFilter === "deleted") {
-        return;
-      }
-      selectItem(actualItem.id);
-    };
-
-    // Hover is one of the two traversals of the same flow: it moves the
-    // selection to the card under the cursor. While an anchor is set
-    // (keyboard takeover, or right after a copy re-rendered the list under
-    // a parked cursor), only a pointer that actually moved re-engages hover.
-    card.addEventListener("mouseenter", (e) => {
-      if (hoverResizeGuard) return;
-      hoverCard(actualItem.id, e.clientX, e.clientY);
-    });
-
-    historyList.appendChild(card);
+      historyList.appendChild(card);
     } catch (e) {
       console.error("Error rendering item:", e, item);
     }
