@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-10-22
 **Deciders:** Omar Estrada
+**Implementation design:** [TDD-0002: Preview modules and lifecycle](../tdd/0002-preview-modules-and-lifecycle.md) (accepted 2026-11-02)
 **Related:** supersedes [ADR-0005](0005-full-content-preview-via-window-widening.md); builds on [ADR-0006](0006-suppress-layout-induced-hover-during-resize.md) (hover guard during native resize) and [ADR-0002](0002-popup-hide-on-blur-with-interaction-guard.md) (blur/hide guards); implemented in `src/preview.ts`, `src/main.ts`, `src-tauri/src/lib.rs`, `src-tauri/capabilities/default.json`, `src/styles.css`
 
 ## Context

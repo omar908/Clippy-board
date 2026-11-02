@@ -31,3 +31,4 @@ design; keep the ADR focused on the decision rather than duplicating this conten
 | TDD | Title | Related ADR | Status |
 |---|---|---|---|
 | [0001](0001-commands-and-shortcuts.md) | Shared commands and shortcut routing | [0008](../adr/0008-shared-commands-and-shortcut-router.md) | Accepted |
+| [0002](0002-preview-modules-and-lifecycle.md) | Preview modules and lifecycle | [0007](../adr/0007-preview-separate-window-with-dock-fallback.md), [0006](../adr/0006-suppress-layout-induced-hover-during-resize.md) | Accepted |

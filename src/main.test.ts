@@ -16,7 +16,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async (name, callback) =
   runtime.events.set(name, callback);
   return vi.fn();
 }) }));
-vi.mock("./preview", () => ({ initPreview: runtime.initPreview, previewRefresh: vi.fn(), previewDismiss: vi.fn(), previewSelectionChanged: vi.fn() }));
+vi.mock("./preview", () => ({ initPreview: runtime.initPreview, disposePreview: vi.fn(), previewRefresh: vi.fn(), previewDismiss: vi.fn(), previewSelectionChanged: vi.fn() }));
 vi.mock("./ui/render/list", () => ({ renderList: runtime.renderList }));
 vi.mock("./ui/keyboard", () => ({ bindKeyboardEvents: vi.fn() }));
 vi.mock("./ui/search", () => ({ bindSearchEvents: vi.fn() }));
