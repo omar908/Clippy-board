@@ -222,3 +222,9 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0005](./docs/adr/0005-full-content-preview-via-window-widening.md) | Full-content preview via main-window widening (aside panel) — superseded by 0007 |
 | [0006](./docs/adr/0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize |
 | [0007](./docs/adr/0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate always-on-top window, docking when there is no room |
+| [0008](./docs/adr/0008-shared-commands-and-shortcut-router.md) | Shared commands and a single shortcut router — accepted |
+
+Implementation designs and extension recipes live in
+[`docs/tdd/`](./docs/tdd/README.md). Start with
+[TDD-0001: Shared commands and shortcut routing](./docs/tdd/0001-commands-and-shortcuts.md)
+when adding actions, shortcuts, or overrides.

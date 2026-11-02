@@ -35,6 +35,10 @@ export function installKeyboardWindow() {
     addEventListener(name: string, callback: Listener, options?: boolean | AddEventListenerOptions) {
       listeners.push({ name, callback, capture: typeof options === "boolean" ? options : Boolean(options?.capture) });
     },
+    removeEventListener(name: string, callback: Listener) {
+      const index = listeners.findIndex(listener => listener.name === name && listener.callback === callback);
+      if (index >= 0) listeners.splice(index, 1);
+    },
   });
 
   return (key: string, options: KeyboardEventInit = {}) => {

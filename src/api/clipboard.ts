@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ClipboardItem, DeletedItem } from "../types";
 
 export async function getHistory() {
-  return invoke<any[]>("get_history");
+  return invoke<ClipboardItem[]>("get_history");
 }
 
 export async function getPinned() {
@@ -29,11 +30,11 @@ export async function clearHistory(ids?: string[] | null, ttlSeconds?: number) {
 }
 
 export async function getDeleted() {
-  return invoke<any[]>("get_deleted");
+  return invoke<DeletedItem[]>("get_deleted");
 }
 
 export async function restoreFromDeleted(id: string) {
-  return invoke<any>("restore_from_deleted", { id });
+  return invoke<ClipboardItem>("restore_from_deleted", { id });
 }
 
 export async function deletePermanentlyFromDeleted(id: string) {

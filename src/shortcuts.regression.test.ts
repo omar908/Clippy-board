@@ -13,23 +13,23 @@ const context = (overrides: Partial<ShortcutContext> = {}): ShortcutContext => (
 });
 
 describe("shortcut regression contracts", () => {
-  // Known bug: an async match can execute in both event phases.
-  it.fails("executes an asynchronous binding once across capture and bubble", async () => {
+  // Bindings are now cached synchronously; actions may still be asynchronous.
+  // These assertions retain the original one-execution/consumption contracts.
+  it("executes an asynchronous action once across capture and bubble", async () => {
     const dispatch = installKeyboardWindow();
-    const action = vi.fn();
+    const action = vi.fn(async () => {});
     const manager = new ShortcutManager(context());
-    manager.register({ id: "pin", combo: async () => "Alt+P", action, stopImmediatePropagation: true });
+    manager.register({ id: "pin", combo: "Alt+P", action, stopImmediatePropagation: true });
     dispatch("p", { altKey: true });
     await settleKeyboard();
     expect(action).toHaveBeenCalledTimes(1);
   });
 
-  // Known bug: matching yields before preventDefault can affect dispatch.
-  it.fails("consumes a matching key before asynchronous work yields", async () => {
+  it("consumes a matching key before asynchronous work yields", async () => {
     const dispatch = installKeyboardWindow();
     const manager = new ShortcutManager(context());
     const action = vi.fn();
-    manager.register({ id: "custom", combo: async () => "Ctrl+K", action, capture: true });
+    manager.register({ id: "custom", combo: "Ctrl+K", action });
     const event = dispatch("k", { ctrlKey: true });
     const consumedDuringDispatch = event.defaultPrevented;
     await settleKeyboard();
@@ -37,13 +37,12 @@ describe("shortcut regression contracts", () => {
     expect(action).toHaveBeenCalledOnce();
   });
 
-  // Known bug: special-case normalization drops the Shift modifier.
-  it.fails("distinguishes Ctrl+Shift+P from Ctrl+P", async () => {
+  it("distinguishes Ctrl+Shift+P from Ctrl+P", async () => {
     installKeyboardWindow();
     const manager = new ShortcutManager(context());
     const action = vi.fn();
     manager.register({ id: "pause", combo: "Ctrl+P", action });
-    await manager.handle(new TestKeyEvent("keydown", { key: "p", ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent, false);
+    await manager.handle(new TestKeyEvent("keydown", { key: "p", ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent);
     expect(action).not.toHaveBeenCalled();
   });
 
@@ -53,7 +52,7 @@ describe("shortcut regression contracts", () => {
     const action = vi.fn();
     let binding = "Ctrl+K";
     manager.register({ id: "custom", combo: () => binding, action });
-    const press = (key: string) => manager.handle(new TestKeyEvent("keydown", { key, ctrlKey: true }) as unknown as KeyboardEvent, false);
+    const press = (key: string) => manager.handle(new TestKeyEvent("keydown", { key, ctrlKey: true }) as unknown as KeyboardEvent);
     await press("k");
     binding = "Ctrl+L";
     await press("k");
@@ -67,7 +66,7 @@ describe("shortcut regression contracts", () => {
     const action = vi.fn();
     const manager = new ShortcutManager(context({ getActiveElement: () => ({ tagName }) as HTMLElement }));
     manager.register({ id: "delete", combo: "Delete", action });
-    await manager.handle(new TestKeyEvent("keydown", { key: "Delete" }) as unknown as KeyboardEvent, false);
+    await manager.handle(new TestKeyEvent("keydown", { key: "Delete" }) as unknown as KeyboardEvent);
     expect(action).not.toHaveBeenCalled();
   });
 });

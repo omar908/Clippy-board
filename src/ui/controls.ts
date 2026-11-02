@@ -1,43 +1,33 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { AppCommands } from "../app/commands";
 import type { Store } from "../state/store";
 import type { AppElements } from "./elements";
 import type { SelectionController } from "./selection";
 import { getEl } from "./dom";
-import { previewDismiss, previewHandleResize, previewNativeDragStart, previewNativeDragEnd } from "../preview";
+import { previewHandleResize, previewNativeDragStart, previewNativeDragEnd } from "../preview";
 
-export function bindWindowControls(store: Store, elements: AppElements, selection: SelectionController, clearView: () => void) {
+export function bindWindowControls(store: Store, elements: AppElements, selection: SelectionController, commands: AppCommands) {
   const { pauseBtn, pinBtn, clearBtn, closeBtn, settingsPage } = elements;
   const { releaseKeyboard, armHoverResizeGuard } = selection;
-  // Header action buttons
-  pauseBtn.addEventListener("click", async () => {
-    store.set({ isPaused: !store.get().isPaused });
-    await invoke("set_listening_paused", { paused: store.get().isPaused });
-    if (store.get().isPaused) {
-      pauseBtn.classList.add("active");
-      pauseBtn.innerHTML = "▶️";
-      pauseBtn.title = "Resume clipboard listening";
-      document.body.classList.add("paused");
-    }
-    else {
-      pauseBtn.classList.remove("active");
-      pauseBtn.innerHTML = "⏸️";
-      pauseBtn.title = "Pause clipboard listening";
-      document.body.classList.remove("paused");
-    }
-  });
-  pinBtn.addEventListener("click", async () => {
-    store.set({ isPinned: !store.get().isPinned });
-    await invoke("set_pinned", { pinned: store.get().isPinned });
-    pinBtn.classList.toggle("active", store.get().isPinned);
-    pinBtn.title = store.get().isPinned ? "Pinned: Window stays open on blur" : "Unpinned: Window hides on blur";
-  });
-  clearBtn.addEventListener("click", () => {
-    clearView();
-  });
-  closeBtn.addEventListener("click", () => {
-    invoke("hide_window").then(() => previewDismiss()).catch(() => { });
-  });
+  let rendered: { isPaused: boolean; isPinned: boolean } | undefined;
+  function renderState() {
+    const { isPaused, isPinned } = store.get();
+    if (rendered?.isPaused === isPaused && rendered.isPinned === isPinned) return;
+    rendered = { isPaused, isPinned };
+    pauseBtn.classList.toggle("active", isPaused);
+    pauseBtn.innerHTML = isPaused ? "▶️" : "⏸️";
+    pauseBtn.title = isPaused ? "Resume clipboard listening" : "Pause clipboard listening";
+    document.body.classList.toggle("paused", isPaused);
+    pinBtn.classList.toggle("active", isPinned);
+    pinBtn.title = isPinned ? "Pinned: Window stays open on blur" : "Unpinned: Window hides on blur";
+  }
+  renderState();
+  const unsubscribe = store.subscribe(renderState);
+  pauseBtn.addEventListener("click", () => commands.execute("listening.toggle"));
+  pinBtn.addEventListener("click", () => commands.execute("window.pin"));
+  clearBtn.addEventListener("click", () => commands.execute("history.clear"));
+  closeBtn.addEventListener("click", () => commands.execute("window.hide"));
   // Resize grip — borderless windows are hard to grab at the edges,
   // so provide an explicit grip in the bottom-right corner.
   const resizeGrip = getEl("resize-grip") as HTMLElement;
@@ -135,5 +125,5 @@ export function bindWindowControls(store: Store, elements: AppElements, selectio
       previewHandleResize();
     })
     .catch(() => { });
-
+  return unsubscribe;
 }

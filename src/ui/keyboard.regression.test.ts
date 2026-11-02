@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo } from "@tauri-apps/api/event";
 import type { ClipboardItem } from "../types";
+import { createAppCommands } from "../app/commands";
 import { Store } from "../state/store";
 import { ShortcutManager } from "../shortcuts";
 import { createHistoryController } from "../app/history";
@@ -15,13 +16,18 @@ import { renderPinButton } from "./render/item";
 const runtime = vi.hoisted(() => ({
   label: "main",
   forwarded: undefined as undefined | ((event: { payload: { key: string } }) => void),
+  command: undefined as undefined | ((event: { payload: { id: string } }) => void),
+  updated: undefined as undefined | ((event: { payload: { shortcuts: Record<string, string> } }) => void),
+  unlisten: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({
   emitTo: vi.fn(async () => {}),
   listen: vi.fn(async (name, callback) => {
     if (name === "preview-forward-key") runtime.forwarded = callback;
-    return vi.fn();
+    if (name === "preview-command") runtime.command = callback;
+    if (name === "shortcuts-updated") runtime.updated = callback;
+    return runtime.unlisten;
   }),
 }));
 vi.mock("@tauri-apps/api/window", () => ({ getCurrentWindow: () => ({
@@ -76,8 +82,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   runtime.label = "main";
   runtime.forwarded = undefined;
+  runtime.command = undefined;
+  runtime.updated = undefined;
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 async function setup() {
   const dispatch = installKeyboardWindow();
@@ -124,19 +132,103 @@ async function setup() {
     releaseKeyboard: vi.fn(), armHoverResizeGuard: vi.fn(), cycleFilterTab: vi.fn(),
     handleListKey: vi.fn(), hoverCard: vi.fn(), anchorAfterCopy: vi.fn(), isHoverBlocked: () => false,
   };
-  bindKeyboardEvents(store, elements, history, selection);
-  bindWindowControls(store, elements, selection, history.clearView);
-  bindSettingsEvents(elements);
+  const commands = createAppCommands(store, elements, history, selection);
+  const keyboard = bindKeyboardEvents(elements, commands);
+  bindWindowControls(store, elements, selection, commands);
+  bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts));
+  await keyboard.ready;
   await settleKeyboard();
   vi.mocked(invoke).mockClear();
-  return { dispatch, store, ports, settings, selection, history };
+  return { dispatch, store, ports, settings, selection, history, commands, keyboard };
 }
 
 const callsTo = (command: string) => vi.mocked(invoke).mock.calls.filter(call => call[0] === command);
 
 describe("keyboard integration regression contracts", () => {
-  // Known bug: the fallback dispatcher bypasses the manager's typing guard.
-  it.fails("does not delete clipboard history while Delete edits the search field", async () => {
+  it("does not fetch settings for individual keypresses", async () => {
+    const { dispatch } = await setup();
+    dispatch("ArrowDown");
+    dispatch("x");
+    dispatch("ArrowUp");
+    await settleKeyboard();
+    expect(callsTo("get_settings")).toEqual([]);
+  });
+
+  it("applies a saved binding immediately and broadcasts it to the preview", async () => {
+    const { dispatch, ports } = await setup();
+    await ports.settingsBtn.dispatch("click");
+    await settleKeyboard();
+    ports.shortcutSearch.value = "Ctrl+K";
+    await ports.settingsSaveBtn.dispatch("click");
+    expect(callsTo("save_settings_cmd")).toHaveLength(1);
+    expect(emitTo).toHaveBeenCalledWith("preview", "shortcuts-updated", {
+      shortcuts: expect.objectContaining({ search: "Ctrl+K" }),
+    });
+    ports.settingsPage.style.display = "none";
+    dispatch("f", { ctrlKey: true });
+    expect(documentPort.activeElement).toBe(documentPort.body);
+    dispatch("k", { ctrlKey: true });
+    expect(documentPort.activeElement).toBe(ports.searchInput);
+  });
+
+  it("rejects conflicting saved bindings before calling the backend", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { ports } = await setup();
+    await ports.settingsBtn.dispatch("click");
+    await settleKeyboard();
+    ports.shortcutPause.value = "Ctrl+F";
+    await ports.settingsSaveBtn.dispatch("click");
+    expect(callsTo("save_settings_cmd")).toEqual([]);
+    expect(alert).toHaveBeenCalledWith(expect.stringContaining("both use Ctrl+F"));
+  });
+
+  it("allows a shortcut to be explicitly disabled through settings", async () => {
+    const { dispatch, ports } = await setup();
+    await ports.settingsBtn.dispatch("click");
+    await settleKeyboard();
+    ports.shortcutSearch.value = "";
+    await ports.settingsSaveBtn.dispatch("click");
+    ports.settingsPage.style.display = "none";
+    expect(dispatch("f", { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(documentPort.activeElement).toBe(documentPort.body);
+  });
+
+  it("does not overwrite a saved binding with an older in-flight settings load", async () => {
+    const { keyboard, dispatch } = await setup();
+    let finish!: (settings: { shortcuts: { search: string } }) => void;
+    vi.mocked(invoke).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const pending = keyboard.refreshSettings();
+    keyboard.updateBindings({ search: "Ctrl+K" });
+    finish({ shortcuts: { search: "Ctrl+F" } });
+    await pending;
+    expect(dispatch("f", { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(dispatch("k", { ctrlKey: true }).defaultPrevented).toBe(true);
+  });
+
+  it("shares temporary action overrides between buttons and shortcuts", async () => {
+    const { commands, dispatch, ports } = await setup();
+    const replacement = vi.fn();
+    const dispose = commands.override("listening.toggle", { execute: replacement });
+    await ports.pauseBtn.dispatch("click");
+    dispatch("p", { ctrlKey: true });
+    await settleKeyboard();
+    expect(replacement).toHaveBeenCalledTimes(2);
+    expect(callsTo("set_listening_paused")).toEqual([]);
+    dispose();
+    await ports.pauseBtn.dispatch("click");
+    expect(callsTo("set_listening_paused")).toEqual([["set_listening_paused", { paused: true }]]);
+  });
+
+  it("keeps pause state unchanged when the backend rejects a command", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { store, ports } = await setup();
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("offline"));
+    await ports.pauseBtn.dispatch("click");
+    expect(store.get().isPaused).toBe(false);
+    expect(ports.pauseBtn.classList.contains("active")).toBe(false);
+  });
+
+  it("does not delete clipboard history while Delete edits the search field", async () => {
     const { dispatch, ports } = await setup();
     ports.searchInput.focus();
     dispatch("Delete");
@@ -180,8 +272,45 @@ describe("keyboard integration regression contracts", () => {
     expect(selection.handleListKey).toHaveBeenCalledExactlyOnceWith("ArrowDown");
   });
 
-  // Known bug: the recorder and matcher use different modifier ordering.
-  it.fails("matches a multi-modifier combination produced by the settings recorder", async () => {
+  it("keeps forwarded navigation out of settings and closes settings on Escape", async () => {
+    const { selection, ports } = await setup();
+    ports.settingsPage.style.display = "flex";
+    runtime.forwarded!({ payload: { key: "ArrowDown" } });
+    expect(selection.handleListKey).not.toHaveBeenCalled();
+    runtime.forwarded!({ payload: { key: "Escape" } });
+    expect(ports.settingsPage.style.display).toBe("none");
+    expect(callsTo("hide_window")).toEqual([]);
+  });
+
+  it("updates preview bindings and forwards the command instead of acting locally", async () => {
+    runtime.label = "preview";
+    const { dispatch } = await setup();
+    runtime.updated!({ payload: { shortcuts: { pause: "Ctrl+K" } } });
+    dispatch("p", { ctrlKey: true });
+    expect(emitTo).not.toHaveBeenCalled();
+    dispatch("k", { ctrlKey: true });
+    expect(emitTo).toHaveBeenCalledExactlyOnceWith("main", "preview-command", { id: "listening.toggle" });
+    expect(callsTo("set_listening_paused")).toEqual([]);
+  });
+
+  it("executes forwarded commands in the main registry and rejects unknown IDs", async () => {
+    await setup();
+    runtime.command!({ payload: { id: "unregistered" } });
+    expect(callsTo("set_listening_paused")).toEqual([]);
+    runtime.command!({ payload: { id: "listening.toggle" } });
+    await settleKeyboard();
+    expect(callsTo("set_listening_paused")).toEqual([["set_listening_paused", { paused: true }]]);
+  });
+
+  it("disposes native listeners and stops handling keys", async () => {
+    const { dispatch, keyboard } = await setup();
+    keyboard.dispose();
+    expect(runtime.unlisten).toHaveBeenCalledTimes(3);
+    expect(dispatch("p", { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(callsTo("set_listening_paused")).toEqual([]);
+  });
+
+  it("matches a multi-modifier combination produced by the settings recorder", async () => {
     const { ports } = await setup();
     const recorded = new TestKeyEvent("keydown", { key: "k", ctrlKey: true, shiftKey: true, altKey: true });
     await ports.shortcutPause.dispatch("keydown", recorded);
@@ -191,25 +320,25 @@ describe("keyboard integration regression contracts", () => {
     });
     const action = vi.fn();
     manager.register({ id: "recorded", combo: ports.shortcutPause.value, action });
-    await manager.handle(new TestKeyEvent("keydown", { key: "k", ctrlKey: true, shiftKey: true, altKey: true }) as unknown as KeyboardEvent, false);
+    await manager.handle(new TestKeyEvent("keydown", { key: "k", ctrlKey: true, shiftKey: true, altKey: true }) as unknown as KeyboardEvent);
     expect(action).toHaveBeenCalledOnce();
   });
 
-  // Known bug: hard-coded Ctrl+F interception prevents reassignment.
-  it.fails("allows Ctrl+F to be reassigned to another action after search is rebound", async () => {
-    const { dispatch, settings, store } = await setup();
+  it("allows Ctrl+F to be reassigned to another action after search is rebound", async () => {
+    const { dispatch, settings, store, keyboard } = await setup();
     settings.shortcuts.search = "Ctrl+K";
     settings.shortcuts.pause = "Ctrl+F";
+    await keyboard.refreshSettings();
     dispatch("f", { ctrlKey: true });
     await settleKeyboard();
     expect(callsTo("set_listening_paused")).toEqual([["set_listening_paused", { paused: true }]]);
     expect(store.get().isPaused).toBe(true);
   });
 
-  // Known bug: duplicate dispatch toggles search focus on and then off.
-  it.fails("uses a new saved shortcut and deactivates the old one", async () => {
-    const { dispatch, settings, ports } = await setup();
+  it("uses a new saved shortcut and deactivates the old one", async () => {
+    const { dispatch, settings, ports, keyboard } = await setup();
     settings.shortcuts.search = "Ctrl+K";
+    await keyboard.refreshSettings();
     dispatch("f", { ctrlKey: true });
     await settleKeyboard();
     expect(documentPort.activeElement).toBe(documentPort.body);
@@ -218,15 +347,15 @@ describe("keyboard integration regression contracts", () => {
     expect(documentPort.activeElement).toBe(ports.searchInput);
   });
 
-  // Known bug: the rebound shortcut toggles pause twice; the button toggles once.
-  it.fails("pauses identically through the button and a rebound shortcut", async () => {
-    const { dispatch, ports, settings, store } = await setup();
+  it("pauses identically through the button and a rebound shortcut", async () => {
+    const { dispatch, ports, settings, store, keyboard } = await setup();
     await ports.pauseBtn.dispatch("click");
     const buttonResult = { paused: store.get().isPaused, active: ports.pauseBtn.classList.contains("active") };
     expect(callsTo("set_listening_paused")).toEqual([["set_listening_paused", { paused: true }]]);
     store.set({ isPaused: false });
     ports.pauseBtn.classList.remove("active");
     settings.shortcuts.pause = "Ctrl+K";
+    await keyboard.refreshSettings();
     vi.mocked(invoke).mockClear();
     dispatch("k", { ctrlKey: true });
     await settleKeyboard();
@@ -238,7 +367,7 @@ describe("keyboard integration regression contracts", () => {
     const app = await setup();
     const button = new ElementPort();
     renderPinButton(app.store.get().history[0], button as unknown as HTMLButtonElement,
-      () => { void app.history.togglePin("first"); });
+      () => { void app.commands.execute("item.pin", "first"); });
     await button.dispatch("click");
     await settleKeyboard();
     expect(callsTo("toggle_pin")).toEqual([["toggle_pin", { id: "first", pinned: true }]]);
@@ -248,12 +377,11 @@ describe("keyboard integration regression contracts", () => {
     expect(app.store.get().isPaused).toBe(true);
   });
 
-  // Known bug: a single Alt+P press invokes the backend more than once.
-  it.fails("pins identically through the card button and its shortcut", async () => {
+  it("pins identically through the card button and its shortcut", async () => {
     const buttonApp = await setup();
     const button = new ElementPort();
     renderPinButton(buttonApp.store.get().history[0], button as unknown as HTMLButtonElement,
-      () => { void buttonApp.history.togglePin("first"); });
+      () => { void buttonApp.commands.execute("item.pin", "first"); });
     await button.dispatch("click");
     await settleKeyboard();
     expect(callsTo("toggle_pin")).toEqual([["toggle_pin", { id: "first", pinned: true }]]);

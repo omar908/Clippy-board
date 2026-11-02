@@ -70,6 +70,14 @@ describe("history controller with shared state", () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  it("leaves pin state unchanged if the backend rejects the mutation", async () => {
+    const { store, controller } = setup();
+    store.set({ history: [text("pin-me")] });
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("offline"));
+    await expect(controller.togglePin("pin-me")).rejects.toThrow("offline");
+    expect(store.get().history[0].pinned).toBe(false);
+  });
+
   it("resets selection after copying and keeps a pinned window's preview open", async () => {
     vi.mocked(previewDismiss).mockClear();
     const { store, controller, callbacks } = setup();

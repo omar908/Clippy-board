@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem } from "./types";
+import { createAppCommands } from "./app/commands";
 import { store } from "./state/store";
 import { createHistoryController } from "./app/history";
 import { getAppElements } from "./ui/elements";
@@ -16,26 +17,30 @@ import { initPreview } from "./preview";
 const elements = getAppElements();
 const history = createHistoryController(store, elements, {
   renderList: () => renderList(elements, () => store.get(), {
-    selectItem: history.selectItem,
-    togglePin: history.togglePin,
-    deleteItem: history.deleteItem,
-    restoreFromDeleted: history.restoreFromDeleted,
-    deletePermanentlyFromDeleted: history.deletePermanentlyFromDeleted,
+    selectItem: id => { void commands.execute("item.copy", id); },
+    togglePin: id => { void commands.execute("item.pin", id); },
+    deleteItem: id => { void commands.execute("item.delete", id); },
+    restoreFromDeleted: id => { void commands.execute("item.restore", id); },
+    deletePermanentlyFromDeleted: id => { void commands.execute("item.deletePermanent", id); },
     hoverCard: selection.hoverCard,
     isHoverBlocked: selection.isHoverBlocked,
   }),
   onSelected: () => selection.anchorAfterCopy(),
 });
-const selection = createSelectionController(store, elements, history);
+const selection = createSelectionController(store, elements, {
+  renderList: history.renderList,
+  selectItem: id => { void commands.execute("item.copy", id); },
+});
+const commands = createAppCommands(store, elements, history, selection);
 const { updateCounts, filterAndRender, loadDeleted, fetchInitialHistory } = history;
 const { historyList } = elements;
 const { releaseKeyboard } = selection;
 
 history.updateClearButtonState();
-bindKeyboardEvents(store, elements, history, selection);
+const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
-bindSettingsEvents(elements);
-bindWindowControls(store, elements, selection, history.clearView);
+bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), () => { void commands.execute("settings.close"); });
+bindWindowControls(store, elements, selection, commands);
 
 // Setup real-time clipboard listener
 async function setupListener() {
