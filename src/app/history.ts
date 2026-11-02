@@ -30,12 +30,18 @@ export function createHistoryController(store: Store, elements: AppElements, cal
     ports.refreshPreview();
   }
   async function selectItem(id: string) {
+    const fromDeleted = store.get().currentFilter === "deleted";
     await ports.selectItem(id);
+    if (fromDeleted) {
+      const [history, deletedItems] = await Promise.all([ports.getHistory(), ports.getDeleted()]);
+      store.set({ history, deletedItems });
+      updateCounts();
+    }
     // The copy bumped this entry to the top of history — follow it there:
     // highlight index 0 and scroll to top (persisting across hide/show,
     // since the DOM survives), and ignore hover at the parked cursor so
     // the re-render can't stomp the selection back.
-    store.set({ selectedIndex: 0 });
+    if (!fromDeleted) store.set({ selectedIndex: 0 });
     callbacks.onSelected();
     filterAndRender();
     // Unpinned: Rust hid the window — restore the pre-preview geometry

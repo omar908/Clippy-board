@@ -9,8 +9,8 @@
 #
 # -Seed clears the real history database, so only use it on a disposable
 # machine/CI runner.
-# The script stops any running clippy.exe first (the app is single-instance in
-# practice: two copies would fight over the tray icon, hotkey, and DB).
+# The script stops any running clippy.exe first so it owns the test instance.
+# It also checks that launching a second copy exits successfully.
 
 [CmdletBinding()]
 param(
@@ -88,11 +88,13 @@ try {
 }
 
 $app = $null
+$secondApp = $null
 $smokeExit = 1
 
 try {
     Write-Host "Starting $Exe (CDP port $Port, browser args: $debugArgs)..."
     $app = Start-Process -FilePath $Exe -PassThru `
+        -WindowStyle Hidden `
         -RedirectStandardOutput $stdoutLog `
         -RedirectStandardError $stderrLog
 
@@ -116,6 +118,21 @@ try {
     }
     if (-not $ready) {
         throw "CDP endpoint did not come up within ${StartupTimeoutSec}s"
+    }
+
+    Write-Host "Checking single-instance handoff..."
+    $secondApp = Start-Process -FilePath $Exe -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logDir "second-stdout.log") `
+        -RedirectStandardError (Join-Path $logDir "second-stderr.log")
+    if (-not $secondApp.WaitForExit(10000)) {
+        throw "Second launch did not exit within 10 seconds"
+    }
+    if ($secondApp.ExitCode -ne 0) {
+        throw "Second launch failed (exit code $($secondApp.ExitCode))"
+    }
+    $app.Refresh()
+    if ($app.HasExited) {
+        throw "The original app exited during single-instance handoff"
     }
 
     Write-Host "Running CDP smoke test..."
@@ -156,6 +173,9 @@ try {
     }
     $smokeExit = 1
 } finally {
+    if ($secondApp -and -not $secondApp.HasExited) {
+        Stop-Process -Id $secondApp.Id -Force -ErrorAction SilentlyContinue
+    }
     if ($app -and -not $app.HasExited) {
         Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
     }

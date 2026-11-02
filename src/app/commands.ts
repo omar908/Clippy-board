@@ -1,6 +1,6 @@
 import { CommandRegistry } from "../commands";
 import * as api from "../api";
-import type { Store } from "../state/store";
+import type { Store, DisplayItem } from "../state/store";
 import type { AppElements } from "../ui/elements";
 import type { SelectionController } from "../ui/selection";
 import type { HistoryController } from "./history";
@@ -28,10 +28,10 @@ export function createAppCommands(
   ports = { setListeningPaused: api.setListeningPaused, setPinned: api.setPinned, hideWindow: api.hideWindow, dismissPreview: previewDismiss }
 ) {
   const commands: AppCommands = new CommandRegistry();
-  const target = (id?: string) => {
-    if (store.get().currentFilter === "deleted") return undefined;
+  const target = (id?: string): DisplayItem | undefined => {
     const selectedId = id ?? store.get().filteredHistory[store.get().selectedIndex]?.id;
-    return store.get().history.find(item => item.id === selectedId);
+    const items = store.get().currentFilter === "deleted" ? store.get().deletedItems : store.get().history;
+    return items.find(item => item.id === selectedId);
   };
   commands.register("search.toggle", {
     execute: () => {
@@ -71,13 +71,15 @@ export function createAppCommands(
     }
   });
   commands.register("item.pin", {
-    exclusive: true, enabled: id => Boolean(target(id)), execute: async id => {
+    exclusive: true, enabled: id => store.get().currentFilter !== "deleted" && Boolean(target(id)), execute: async id => {
       await history.togglePin(target(id)!.id);
     }
   });
   commands.register("item.delete", {
     exclusive: true, enabled: id => Boolean(target(id) && !target(id)!.pinned), execute: async id => {
-      await history.deleteItem(target(id)!.id);
+      const item = target(id)!;
+      if (store.get().currentFilter === "deleted") await history.deletePermanentlyFromDeleted(item.id);
+      else await history.deleteItem(item.id);
     }
   });
   const isDeleted = (id: string) => store.get().deletedItems.some(item => item.id === id);

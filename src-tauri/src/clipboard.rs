@@ -1,12 +1,42 @@
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 pub static IS_SELF_COPY: AtomicBool = AtomicBool::new(false);
+static SELF_COPY_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 pub static IS_LISTENING_PAUSED: AtomicBool = AtomicBool::new(false);
+
+fn is_self_copy(sequence: u32) -> bool {
+    IS_SELF_COPY.load(Ordering::SeqCst)
+        || (sequence != 0 && sequence == SELF_COPY_SEQUENCE.load(Ordering::SeqCst))
+}
+
+#[cfg(test)]
+mod self_copy_tests {
+    use super::*;
+
+    #[test]
+    fn late_monitor_poll_skips_own_write_and_failed_copy_does_not_leave_monitor_paused() {
+        SELF_COPY_SEQUENCE.store(123, Ordering::SeqCst);
+        IS_SELF_COPY.store(false, Ordering::SeqCst);
+        // Simulate a poll after the write has returned, then an external copy.
+        assert!(is_self_copy(123));
+        assert!(!is_self_copy(124));
+        assert!(!is_self_copy(0));
+        let invalid_image = ClipboardPayload::Image {
+            data_url: "data:image/png;base64,!!".into(), thumbnail: None,
+            width: 1, height: 1, byte_size: 1,
+        };
+        assert!(write_clipboard(&invalid_image).is_err());
+        assert!(!IS_SELF_COPY.load(Ordering::SeqCst));
+        assert!(is_self_copy(123));
+        assert!(!is_self_copy(124));
+        SELF_COPY_SEQUENCE.store(0, Ordering::SeqCst);
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "payload")]
@@ -357,7 +387,9 @@ pub fn read_clipboard() -> Option<ClipboardPayload> {
 pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
     IS_SELF_COPY.store(true, Ordering::SeqCst);
 
-    let result = match payload {
+    // Keep fallible decoding/opening inside the closure so every error path
+    // clears the in-flight flag below.
+    let result = (|| match payload {
         ClipboardPayload::Text { text, .. } => {
             let mut clipboard = arboard::Clipboard::new()
                 .map_err(|e| format!("Failed to open clipboard: {}", e))?;
@@ -406,10 +438,13 @@ pub fn write_clipboard(payload: &ClipboardPayload) -> Result<(), String> {
                 Err("File clipboard writing only supported on Windows".to_string())
             }
         }
-    };
+    })();
 
-    // Small delay to let OS register the sequence number update before clearing self copy flag
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    // A polling monitor can observe the write after this function returns.
+    // Remember the OS sequence rather than depending on a short timed flag.
+    if result.is_ok() {
+        SELF_COPY_SEQUENCE.store(win32::get_sequence_number(), Ordering::SeqCst);
+    }
     IS_SELF_COPY.store(false, Ordering::SeqCst);
 
     result
@@ -575,7 +610,7 @@ pub fn start_clipboard_monitor(
                 last_seq = current_seq;
 
                 // Check if this was triggered by our own copy operation
-                if IS_SELF_COPY.load(Ordering::SeqCst) {
+                if is_self_copy(current_seq) {
                     continue;
                 }
 

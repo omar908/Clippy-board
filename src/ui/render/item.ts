@@ -55,7 +55,7 @@ export function renderActions(
     // Undo button
     const undoBtn = document.createElement("button");
     undoBtn.className = "item-action-btn btn-undo";
-    undoBtn.title = "Undo - restore to history";
+    undoBtn.title = "Restore to original position without copying";
     undoBtn.setAttribute("aria-label", "Undo restore");
     undoBtn.innerHTML = "↶";
     undoBtn.onclick = (e) => {

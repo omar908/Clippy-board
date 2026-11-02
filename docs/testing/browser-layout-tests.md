@@ -35,6 +35,9 @@ unintended horizontal overflow, literal/scrollable long text, all file paths,
 image fit and zoom, and accessibility visibility. Main-window cases also exercise
 pointer/keyboard Back without copying, selection retention, and resize transitions
 between compact and docked using the actual application handlers.
+They also check card-click/keyboard restore-and-copy and permanent deletion in
+Deleted using the same shared commands as the active history tabs. The Restore
+button is checked separately: original timestamp order, without copying.
 
 Tests fail on browser JavaScript errors and console errors. They use bounding-box
 invariants rather than pixel-perfect screenshot baselines, so ordinary cosmetic

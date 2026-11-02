@@ -145,6 +145,42 @@ async function setup() {
 const callsTo = (command: string) => vi.mocked(invoke).mock.calls.filter(call => call[0] === command);
 
 describe("keyboard integration regression contracts", () => {
+  it("honors the saved Delete override in Deleted and leaves typing alone", async () => {
+    const { dispatch, store, history, settings, keyboard, ports } = await setup();
+    store.set({ currentFilter: "deleted", deletedItems: [
+      { ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 },
+    ] });
+    history.filterAndRender();
+    settings.shortcuts.delete = "Ctrl+D";
+    await keyboard.refreshSettings();
+    dispatch("Delete");
+    ports.searchInput.focus();
+    dispatch("d", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([]);
+    ports.searchInput.blur();
+    dispatch("d", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([["delete_permanently_from_deleted", { id: "trash" }]]);
+  });
+  it("copies and permanently deletes Deleted entries through the shared keyboard actions", async () => {
+    const { dispatch, store, history } = await setup();
+    store.set({ currentFilter: "deleted", deletedItems: [
+      { ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 },
+    ] });
+    history.filterAndRender();
+    dispatch("Enter");
+    await settleKeyboard();
+    expect(callsTo("select_item")).toEqual([["select_item", { id: "trash" }]]);
+    expect(store.get().deletedItems).toHaveLength(0);
+    store.set({ deletedItems: [{ ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 }] });
+    history.filterAndRender();
+    dispatch("Delete");
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([["delete_permanently_from_deleted", { id: "trash" }]]);
+    expect(callsTo("delete_item")).toEqual([]);
+    expect(store.get().deletedItems).toEqual([]);
+  });
   it("leaves Enter available to activate the compact preview's Back button", async () => {
     const { dispatch } = await setup();
     const back = new ElementPort();
