@@ -9,6 +9,10 @@ pub static IS_SELF_COPY: AtomicBool = AtomicBool::new(false);
 static SELF_COPY_SEQUENCE: AtomicU32 = AtomicU32::new(0);
 pub static IS_LISTENING_PAUSED: AtomicBool = AtomicBool::new(false);
 
+pub(crate) fn sequence_number() -> u32 {
+    win32::get_sequence_number()
+}
+
 fn is_self_copy(sequence: u32) -> bool {
     IS_SELF_COPY.load(Ordering::SeqCst)
         || (sequence != 0 && sequence == SELF_COPY_SEQUENCE.load(Ordering::SeqCst))
@@ -91,6 +95,7 @@ pub struct DeletedItem {
 
 #[derive(Clone)]
 pub struct ClipboardState {
+    pub current_payload: Arc<Mutex<Option<ClipboardPayload>>>,
     pub history: Arc<Mutex<Vec<ClipboardItem>>>,
     /// SQLite connection for persistent history (None = storage unavailable,
     /// the app degrades to in-memory-only behavior).
@@ -102,6 +107,7 @@ pub struct ClipboardState {
 impl ClipboardState {
     pub fn new() -> Self {
         Self {
+            current_payload: Arc::new(Mutex::new(None)),
             history: Arc::new(Mutex::new(Vec::new())),
             db: Arc::new(Mutex::new(None)),
             deleted: Arc::new(Mutex::new(Vec::new())),
@@ -591,17 +597,17 @@ pub fn bump_on_select(
 /// Start background clipboard monitoring thread
 pub fn start_clipboard_monitor(
     app_handle: AppHandle,
-    state: Arc<Mutex<Vec<ClipboardItem>>>,
-    db: Arc<Mutex<Option<rusqlite::Connection>>>,
+    state: ClipboardState,
 ) {
     std::thread::spawn(move || {
         // Startup capture: only add if the current clipboard is NOT already
         // anywhere in the loaded history (never reorder on launch).
-        if let Some(payload) = read_clipboard() {
-            record_capture(&app_handle, &state, &db, payload, false);
-        }
-
         let mut last_seq = win32::get_sequence_number();
+        let initial = read_clipboard();
+        if let Some(payload) = initial.clone() {
+            record_capture(&app_handle, &state.history, &state.db, payload, false);
+        }
+        crate::current_clipboard::update(&app_handle, initial, last_seq);
         loop {
             std::thread::sleep(std::time::Duration::from_millis(150));
 
@@ -614,15 +620,17 @@ pub fn start_clipboard_monitor(
                     continue;
                 }
 
-                // Don't capture while paused
-                if IS_LISTENING_PAUSED.load(Ordering::SeqCst) {
+                let payload = read_clipboard();
+                // A clipboard change during a read invalidates this snapshot.
+                if win32::get_sequence_number() != current_seq {
                     continue;
                 }
-
-                // Read clipboard — full-history dedup with move-to-top
-                if let Some(payload) = read_clipboard() {
-                    record_capture(&app_handle, &state, &db, payload, true);
+                if !IS_LISTENING_PAUSED.load(Ordering::SeqCst) {
+                    if let Some(payload) = payload.clone() {
+                        record_capture(&app_handle, &state.history, &state.db, payload, true);
+                    }
                 }
+                crate::current_clipboard::update(&app_handle, payload, current_seq);
             }
         }
     });

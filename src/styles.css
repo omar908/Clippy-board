@@ -550,6 +550,21 @@ body.preview-window .preview-panel {
   box-shadow: 0 0 0 1px var(--border-active);
 }
 
+.history-item.on-clipboard:not(.selected) {
+  border-color: #45bd9c;
+}
+
+.item-clipboard-badge {
+  color: #8ae0c4;
+  background: rgba(69, 189, 156, 0.13);
+  border: 1px solid rgba(69, 189, 156, 0.4);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .item-header {
   display: flex;
   align-items: center;
@@ -560,6 +575,8 @@ body.preview-window .preview-panel {
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .item-badge {

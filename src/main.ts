@@ -6,6 +6,7 @@ import { normalizeClipboardItem } from "./api/normalize";
 import { createAppCommands } from "./app/commands";
 import { store } from "./state/store";
 import { createHistoryController } from "./app/history";
+import { createCurrentClipboardController } from "./app/current-clipboard";
 import { getAppElements } from "./ui/elements";
 import { renderList } from "./ui/render/list";
 import { createSelectionController } from "./ui/selection";
@@ -35,6 +36,8 @@ const selection = createSelectionController(store, elements, {
 const commands = createAppCommands(store, elements, history, selection);
 const { updateCounts, filterAndRender, loadDeleted, fetchInitialHistory } = history;
 const { historyList } = elements;
+const currentClipboard = createCurrentClipboardController(store, historyList);
+window.addEventListener("beforeunload", () => currentClipboard.dispose());
 const { releaseKeyboard } = selection;
 
 history.updateClearButtonState();
@@ -99,6 +102,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   if (label === "preview")
     return;
+  void currentClipboard.start().catch(error => console.error("Could not track current clipboard:", error));
   fetchInitialHistory();
   setupListener();
 });

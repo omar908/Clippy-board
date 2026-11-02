@@ -12,6 +12,7 @@ export type AppState = {
   searchQuery: string;
   isPinned: boolean;
   isPaused: boolean;
+  currentClipboardId: string | null;
 };
 
 export class Store {
@@ -19,6 +20,7 @@ export class Store {
     history: [], deletedItems: [], filteredHistory: [],
     currentFilter: "all", selectedIndex: 0, searchQuery: "",
     isPinned: false, isPaused: false,
+    currentClipboardId: null,
   };
   private listeners = new Set<(state: AppState) => void>();
 

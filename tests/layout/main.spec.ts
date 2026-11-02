@@ -1,4 +1,37 @@
-import { test, expect, openPreview } from "./helpers";
+import { test, expect, openPreview, expectUnclipped } from "./helpers";
+
+for (const content of ["text", "long", "image", "files"]) {
+  test(`current clipboard badge is separate from selection and fits a narrow ${content} card`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 580 });
+    await page.goto(`/?mode=main&content=${content}&clipboard=second`);
+    const badge = page.locator(".item-clipboard-badge");
+    await expect(badge).toHaveCount(1);
+    await expect(badge).toHaveText("On clipboard");
+    await expect(page.locator('.history-item[data-id="second"]')).toHaveClass(/on-clipboard/);
+    await expect(page.locator('.history-item[data-id="first"]')).toHaveClass(/selected/);
+    await expectUnclipped(page, ".item-clipboard-badge, .item-actions", '.history-item[data-id="second"]');
+    // Startup with unsupported/empty/untracked contents has no confirmed match.
+    await page.goto(`/?mode=main&content=${content}`);
+    await expect(page.locator(".history-item")).toHaveCount(2);
+    await expect(badge).toHaveCount(0);
+  });
+}
+
+test("clipboard changes and copying update the badge without changing selection", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 580 });
+  await page.goto("/?mode=main&clipboard=second");
+  await expect(page.locator(".item-clipboard-badge")).toHaveCount(1);
+  await page.keyboard.press("Home");
+  await page.locator("#pause-btn").click();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-current-clipboard", { detail: "first" })));
+  await expect(page.locator('.history-item[data-id="first"]')).toHaveClass(/on-clipboard/);
+  await expect(page.locator(".history-item.selected")).toHaveAttribute("data-id", "first");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-current-clipboard", { detail: null })));
+  await expect(page.locator(".item-clipboard-badge")).toHaveCount(0);
+  await page.locator('.history-item[data-id="second"] .item-content-text').click();
+  await expect(page.locator('.history-item[data-id="second"]')).toHaveClass(/on-clipboard/);
+  await expect(page.locator(".item-clipboard-badge")).toHaveCount(1);
+});
 
 test("Restore defaults to Ctrl+R and can be overridden in Settings", async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 580 });
