@@ -22,8 +22,7 @@ mod tests {
     fn soft_delete_moves_to_deleted() {
         let state = ClipboardState {
             history: Arc::new(Mutex::new(vec![text_item("1", 1000, "hi")])),
-            db: Arc::new(Mutex::new(None)),
-            deleted: Arc::new(Mutex::new(vec![])),
+            ..ClipboardState::new()
         };
         let now = 10000u64;
         let ttl_ms = 60000u64;
@@ -42,8 +41,6 @@ mod tests {
     #[test]
     fn restore_moves_back_to_history() {
         let state = ClipboardState {
-            history: Arc::new(Mutex::new(vec![])),
-            db: Arc::new(Mutex::new(None)),
             deleted: Arc::new(Mutex::new(vec![DeletedItem {
                 id: "x".to_string(),
                 original_timestamp: 500,
@@ -55,6 +52,7 @@ mod tests {
                     line_count: 1,
                 },
             }])),
+            ..ClipboardState::new()
         };
         let item = state.deleted.lock().unwrap().remove(0);
         state.history.lock().unwrap().push(ClipboardItem {
@@ -70,8 +68,6 @@ mod tests {
     #[test]
     fn permanent_delete_clears() {
         let state = ClipboardState {
-            history: Arc::new(Mutex::new(vec![])),
-            db: Arc::new(Mutex::new(None)),
             deleted: Arc::new(Mutex::new(vec![DeletedItem {
                 id: "x".to_string(),
                 original_timestamp: 500,
@@ -83,6 +79,7 @@ mod tests {
                     line_count: 1,
                 },
             }])),
+            ..ClipboardState::new()
         };
         state.deleted.lock().unwrap().clear();
         assert_eq!(state.deleted.lock().unwrap().len(), 0);
