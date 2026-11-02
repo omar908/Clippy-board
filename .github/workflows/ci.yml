@@ -54,6 +54,26 @@ jobs:
       - name: Run frontend tests
         run: npm test
 
+      - name: Typecheck browser layout tests
+        run: npm run typecheck:layout
+
+      - name: Install Chromium for layout tests
+        run: npx playwright install chromium
+
+      - name: Run browser layout tests
+        run: npm run test:layout
+
+      - name: Upload browser layout diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-layout-results
+          path: |
+            playwright-report/
+            test-results/layout/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build frontend (typecheck + vite)
         run: npm run build
 

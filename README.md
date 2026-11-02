@@ -129,6 +129,12 @@ and `npm run test:release` to validate release metadata and policy. Existing tag
 are never moved to another commit. If a release job fails, rerun the original
 workflow; a tag already targeting that same commit is safe to reuse.
 
+CI also runs real-browser preview layout tests before release eligibility. Run
+`npx playwright install chromium`, `npm run typecheck:layout`, and
+`npm run test:layout` locally. See the
+[browser layout test guide](./docs/testing/browser-layout-tests.md) for viewport
+coverage, failure screenshots/traces, and the distinction from native DPI tests.
+
 To fill the clipboard with a varied sample set (text of every length, images from
 1×1 to a 3 MB PNG, file drops):
 
