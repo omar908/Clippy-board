@@ -824,7 +824,8 @@ body.preview-window .preview-panel {
   border-radius: 3px;
 }
 
-.settings-section {
+.settings-section,
+#shortcut-fields {
   display: flex;
   flex-direction: column;
   gap: 8px;

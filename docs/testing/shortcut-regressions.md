@@ -21,6 +21,12 @@ exercise the actual settings Save handler and its immediate cache update.
 Additional suites cover command availability, binding precedence/conflicts,
 explicit disabling, nested temporary overrides, registration replacement,
 cleanup, in-flight settings loads, and backend failures.
+Deleted-tab regressions cover shared Enter/Delete actions, saved Delete overrides,
+typing protection, restoring copied items to the top of All, and preserving
+Deleted entries when a clipboard write fails.
+Native Rust tests reject expired copy targets and preserve Alt+Space while
+filtering bare menu activation; the Windows smoke runner checks that a second
+launch exits while the original process continues.
 
 The integration suite runs the actual keyboard, settings, controls, history,
 command registry, and store code. A synchronous window-dispatch harness exercises propagation

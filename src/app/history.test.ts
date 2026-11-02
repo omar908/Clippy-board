@@ -30,6 +30,31 @@ beforeEach(() => vi.mocked(invoke).mockReset());
 afterEach(() => vi.restoreAllMocks());
 
 describe("history controller with shared state", () => {
+  it("refreshes both tabs and counts after restoring and copying from Deleted", async () => {
+    const { store, controller, callbacks } = setup();
+    const deleted = ["one", "two"].map(id => ({ ...text(id), deleted_at: 10, original_timestamp: 1 }));
+    store.set({ currentFilter: "deleted", deletedItems: deleted, selectedIndex: 1 });
+    controller.filterAndRender();
+    vi.mocked(invoke).mockImplementation(async command => {
+      if (command === "get_history") return [{ ...text("two"), timestamp: 100 }];
+      if (command === "get_deleted") return [deleted[0]];
+    });
+    await controller.selectItem("two");
+    expect(invoke).toHaveBeenCalledWith("select_item", { id: "two" });
+    expect(store.get().deletedItems).toMatchObject([{ id: "one", original_timestamp: 1, deleted_at: 10 }]);
+    expect(store.get().history).toEqual([{ ...text("two"), timestamp: 100 }]);
+    expect(store.get().selectedIndex).toBe(0);
+    expect(callbacks.onSelected).toHaveBeenCalledOnce();
+  });
+  it("leaves Deleted intact when copying fails", async () => {
+    const { store, controller } = setup();
+    const deleted = [{ ...text("one"), deleted_at: 10, original_timestamp: 1 }];
+    store.set({ currentFilter: "deleted", deletedItems: deleted });
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("Clipboard busy"));
+    await expect(controller.selectItem("one")).rejects.toThrow("Clipboard busy");
+    expect(store.get().deletedItems).toEqual(deleted);
+    expect(store.get().history).toEqual([]);
+  });
   it("preserves the last valid history when a malformed fetch is rejected at the API boundary", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const { store, controller, callbacks } = setup();
@@ -62,10 +87,13 @@ describe("history controller with shared state", () => {
   it("restores an item once and removes it from Deleted", async () => {
     const { store, controller } = setup();
     const restored = text("restored");
-    store.set({ history: [restored], deletedItems: [{ ...restored, deleted_at: 2, original_timestamp: 1 }] });
+    const newer = { ...text("newer"), timestamp: 10 };
+    store.set({ history: [newer, restored], deletedItems: [{ ...restored, deleted_at: 2, original_timestamp: 1 }] });
     vi.mocked(invoke).mockResolvedValue(restored);
     await controller.restoreFromDeleted("restored");
-    expect(store.get().history).toEqual([restored]);
+    expect(store.get().history).toEqual([restored, newer]);
+    expect(store.get().filteredHistory.map(item => item.id)).toEqual(["newer", "restored"]);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("restore_from_deleted", { id: "restored" });
     expect(store.get().deletedItems).toEqual([]);
   });
 

@@ -8,7 +8,7 @@ export type AppShortcut = {
   combo: string;
   settingsKey?: string;
   inputId?: string;
-  scope: "list" | "search" | "escape" | "tabs";
+  scope: "list" | "search" | "escape" | "tabs" | "window";
   forwardKey?: string;
   run: (commands: AppCommands) => Promise<boolean>;
 };
@@ -19,6 +19,8 @@ export const shortcutDefinitions: AppShortcut[] = [
   { id: "listening.toggle", label: "Pause / resume listening", combo: "Ctrl+P", settingsKey: "pause", inputId: "shortcut-pause", scope: "list", run: c => c.execute("listening.toggle") },
   { id: "item.pin", label: "Pin / unpin item", combo: "Alt+P", settingsKey: "pinItem", inputId: "shortcut-pin-item", scope: "list", run: c => c.execute("item.pin") },
   { id: "item.delete", label: "Delete item", combo: "Delete", settingsKey: "delete", inputId: "shortcut-delete", scope: "list", run: c => c.execute("item.delete") },
+  { id: "item.restore", label: "Restore item without copying", combo: "Ctrl+R", settingsKey: "restore", scope: "list", run: c => c.execute("item.restore") },
+  { id: "window.menu", label: "Window menu", combo: "Alt+Space", settingsKey: "windowMenu", scope: "window", run: c => c.execute("window.menu") },
   { id: "item.copy", label: "Copy selected item", combo: "Enter", scope: "list", forwardKey: "Enter", run: c => c.execute("item.copy") },
   ...["ArrowDown", "ArrowUp", "Home", "End", "PageDown", "PageUp"].map(key => ({
     id: `list.${key}`, label: key, combo: key, scope: "list" as const, forwardKey: key,

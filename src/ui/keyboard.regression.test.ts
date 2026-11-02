@@ -70,6 +70,8 @@ class ElementPort {
   focus() { documentPort.activeElement = this; }
   blur() { documentPort.activeElement = documentPort.body; }
   setAttribute(_name: string, _value: string) {}
+  append(..._children: ElementPort[]) {}
+  appendChild(child: ElementPort) { return child; }
 }
 
 let documentPort: { activeElement: ElementPort; body: ElementPort };
@@ -93,9 +95,14 @@ async function setup() {
   body.tagName = "BODY";
   documentPort = { body, activeElement: body };
   const extra = new ElementPort();
+  const generated: ElementPort[] = [];
   vi.stubGlobal("document", {
     get activeElement() { return documentPort.activeElement; }, body,
-    getElementById: () => extra, querySelector: () => extra,
+    getElementById: (id: string) => generated.find(element => element.id === id) ?? extra, querySelector: () => extra,
+    createElement: (tag: string) => {
+      const element = new ElementPort(); element.tagName = tag.toUpperCase();
+      generated.push(element); return element;
+    },
   });
   vi.stubGlobal("alert", vi.fn());
   const keys = [
@@ -139,12 +146,127 @@ async function setup() {
   await keyboard.ready;
   await settleKeyboard();
   vi.mocked(invoke).mockClear();
-  return { dispatch, store, ports, settings, selection, history, commands, keyboard };
+  return { dispatch, store, ports, settings, selection, history, commands, keyboard, generated };
 }
 
 const callsTo = (command: string) => vi.mocked(invoke).mock.calls.filter(call => call[0] === command);
 
 describe("keyboard integration regression contracts", () => {
+  it("restores with Ctrl+R only in Deleted, and supports rebinding and disabling", async () => {
+    const { dispatch, store, history, keyboard, ports } = await setup();
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toEqual([]);
+    store.set({ currentFilter: "deleted", deletedItems: [{ ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 }] });
+    history.filterAndRender();
+    ports.searchInput.focus();
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toEqual([]);
+    ports.searchInput.blur();
+    vi.mocked(invoke).mockResolvedValueOnce(item("trash"));
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toEqual([["restore_from_deleted", { id: "trash" }]]);
+    expect(callsTo("select_item")).toEqual([]);
+    expect(store.get().deletedItems).toEqual([]);
+    keyboard.updateBindings({ restore: "Ctrl+K" });
+    store.set({ deletedItems: [{ ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 }] });
+    history.filterAndRender();
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toHaveLength(1);
+    vi.mocked(invoke).mockResolvedValueOnce(item("trash"));
+    dispatch("k", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toHaveLength(2);
+    keyboard.updateBindings({ restore: "" });
+    store.set({ deletedItems: [{ ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 }] });
+    history.filterAndRender();
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("restore_from_deleted")).toHaveLength(2);
+  });
+
+  it("opens the window menu through the shared default and saved override", async () => {
+    const { dispatch, keyboard } = await setup();
+    dispatch(" ", { altKey: true });
+    await settleKeyboard();
+    expect(callsTo("show_window_menu")).toHaveLength(1);
+    keyboard.updateBindings({ windowMenu: "Ctrl+M" });
+    dispatch(" ", { altKey: true });
+    dispatch("m", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("show_window_menu")).toHaveLength(2);
+    keyboard.updateBindings({ windowMenu: "" });
+    dispatch(" ", { altKey: true });
+    await settleKeyboard();
+    expect(callsTo("show_window_menu")).toHaveLength(2);
+  });
+
+  it("opens the preview's own menu while forwarding Restore to the main selection", async () => {
+    runtime.label = "preview";
+    const { dispatch } = await setup();
+    dispatch(" ", { altKey: true });
+    await settleKeyboard();
+    expect(callsTo("show_window_menu")).toHaveLength(1);
+    expect(emitTo).not.toHaveBeenCalledWith("main", "preview-command", { id: "window.menu" });
+    dispatch("r", { ctrlKey: true });
+    await settleKeyboard();
+    expect(emitTo).toHaveBeenCalledWith("main", "preview-command", { id: "item.restore" });
+    expect(callsTo("restore_from_deleted")).toEqual([]);
+  });
+
+  it("generates both settings fields and saves and resets their bindings", async () => {
+    const { ports, generated } = await setup();
+    await ports.settingsBtn.dispatch("click");
+    await settleKeyboard();
+    const restore = generated.find(element => element.id === "shortcut-item-restore")!;
+    const menu = generated.find(element => element.id === "shortcut-window-menu")!;
+    expect(restore.value).toBe("Ctrl+R");
+    expect(menu.value).toBe("Alt+Space");
+    restore.value = "Ctrl+K"; menu.value = "Ctrl+M";
+    await ports.settingsSaveBtn.dispatch("click");
+    expect(callsTo("save_settings_cmd")[0]?.[1]).toMatchObject({ settings: { shortcuts: { restore: "Ctrl+K", windowMenu: "Ctrl+M" } } });
+    await ports.shortcutsReset.dispatch("click");
+    expect(restore.value).toBe("Ctrl+R"); expect(menu.value).toBe("Alt+Space");
+  });
+  it("honors the saved Delete override in Deleted and leaves typing alone", async () => {
+    const { dispatch, store, history, settings, keyboard, ports } = await setup();
+    store.set({ currentFilter: "deleted", deletedItems: [
+      { ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 },
+    ] });
+    history.filterAndRender();
+    settings.shortcuts.delete = "Ctrl+D";
+    await keyboard.refreshSettings();
+    dispatch("Delete");
+    ports.searchInput.focus();
+    dispatch("d", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([]);
+    ports.searchInput.blur();
+    dispatch("d", { ctrlKey: true });
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([["delete_permanently_from_deleted", { id: "trash" }]]);
+  });
+  it("copies and permanently deletes Deleted entries through the shared keyboard actions", async () => {
+    const { dispatch, store, history } = await setup();
+    store.set({ currentFilter: "deleted", deletedItems: [
+      { ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 },
+    ] });
+    history.filterAndRender();
+    dispatch("Enter");
+    await settleKeyboard();
+    expect(callsTo("select_item")).toEqual([["select_item", { id: "trash" }]]);
+    expect(store.get().deletedItems).toHaveLength(0);
+    store.set({ deletedItems: [{ ...item("trash"), original_timestamp: 1, deleted_at: Date.now() + 60_000 }] });
+    history.filterAndRender();
+    dispatch("Delete");
+    await settleKeyboard();
+    expect(callsTo("delete_permanently_from_deleted")).toEqual([["delete_permanently_from_deleted", { id: "trash" }]]);
+    expect(callsTo("delete_item")).toEqual([]);
+    expect(store.get().deletedItems).toEqual([]);
+  });
   it("leaves Enter available to activate the compact preview's Back button", async () => {
     const { dispatch } = await setup();
     const back = new ElementPort();
@@ -316,7 +438,7 @@ describe("keyboard integration regression contracts", () => {
   it("disposes native listeners and stops handling keys", async () => {
     const { dispatch, keyboard } = await setup();
     keyboard.dispose();
-    expect(runtime.unlisten).toHaveBeenCalledTimes(3);
+    expect(runtime.unlisten).toHaveBeenCalledTimes(4);
     expect(dispatch("p", { ctrlKey: true }).defaultPrevented).toBe(false);
     expect(callsTo("set_listening_paused")).toEqual([]);
   });

@@ -1,6 +1,13 @@
 pub mod clipboard;
 pub mod settings;
 pub mod storage;
+mod window_menu;
+mod item_selection;
+
+#[tauri::command]
+fn show_window_menu(window: tauri::WebviewWindow) -> Result<(), String> {
+    window_menu::show(&window)
+}
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
@@ -32,29 +39,15 @@ fn get_history(state: State<ClipboardState>) -> Vec<ClipboardItem> {
 
 #[tauri::command]
 fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Result<(), String> {
-    let payload = {
-        let history = state.history.lock().unwrap();
-        history.iter().find(|i| i.id == id).map(|i| i.payload.clone())
-    };
-
-    if let Some(payload) = payload {
-        // Only reorder on a successful write — a failed restore must not
-        // bump the item (IS_SELF_COPY keeps the monitor from double-handling
-        // this write, so the reorder is done directly here).
-        clipboard::write_clipboard(&payload)?;
-        if let Some(item) = clipboard::bump_on_select(&state, &id) {
-            let _ = app.emit("clipboard-updated", &item);
-        }
-        // Like every other hide path, copy-dismiss checks IS_PINNED
-        // (ADR-0002): a pinned window stays open after copying so you can
-        // keep working through the list.
-        if !IS_PINNED.load(Ordering::SeqCst) {
-            hide_main_window(&app);
-        }
-        Ok(())
-    } else {
-        Err("Item not found".to_string())
+    let item = item_selection::copy(&state, &id, now_ms(), clipboard::write_clipboard)?;
+    let _ = app.emit("clipboard-updated", &item);
+    // Like every other hide path, copy-dismiss checks IS_PINNED
+    // (ADR-0002): a pinned window stays open after copying so you can
+    // keep working through the list.
+    if !IS_PINNED.load(Ordering::SeqCst) {
+        hide_main_window(&app);
     }
+    Ok(())
 }
 
 #[tauri::command]
@@ -544,9 +537,6 @@ fn defer_hide_until_mouse_up(app: AppHandle) {
 
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        if window.is_visible().unwrap_or(false) {
-            return;
-        }
         // Record when we showed so the Focused(false) handler doesn't immediately hide
         WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
         // Center only the first time; afterwards keep the user's position/size
@@ -617,6 +607,10 @@ pub fn run() {
     let shortcut_clone = shortcut.clone();
 
     let builder = tauri::Builder::default()
+        // Register first so a second launch exits before starting monitors or storage.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -703,7 +697,7 @@ pub fn run() {
             if let Some(args) = &cdp_browser_args {
                 main_builder = main_builder.additional_browser_args(args);
             }
-            let _main_win = match main_builder.build() {
+            let main_win = match main_builder.build() {
                 Ok(win) => {
                     app_log(&format!("WebviewWindow built: label={}", win.label()));
                     win
@@ -713,6 +707,7 @@ pub fn run() {
                     return Err(e.into());
                 }
             };
+            window_menu::install(&main_win)?;
 
             // Create preview window — separate always-on-top window. It is made
             // non-activating (WS_EX_NOACTIVATE) so showing it never steals focus
@@ -731,7 +726,7 @@ pub fn run() {
             if let Some(args) = &cdp_browser_args {
                 preview_builder = preview_builder.additional_browser_args(args);
             }
-            let _preview_win = match preview_builder.build() {
+            let preview_win = match preview_builder.build() {
                 Ok(win) => {
                     make_non_activating(&win);
                     app_log(&format!("Preview window built: label={}", win.label()));
@@ -742,6 +737,7 @@ pub fn run() {
                     return Err(e.into());
                 }
             };
+            window_menu::install(&preview_win)?;
 
             // Start clipboard monitor
             let app_handle = app.handle().clone();
@@ -865,6 +861,7 @@ pub fn run() {
             delete_permanently_from_deleted,
             purge_expired_deleted,
             hide_window,
+            show_window_menu,
             show_window,
             set_pinned,
             get_pinned,

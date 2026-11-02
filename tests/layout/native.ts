@@ -1,4 +1,4 @@
-import type { ClipboardItem } from "../../src/types";
+import type { ClipboardItem, DeletedItem } from "../../src/types";
 
 // Deterministic native boundary for a real browser. These tests do not model
 // OS focus, physical monitor switching, native IPC, or a second native window.
@@ -7,6 +7,10 @@ const label = params.get("mode") === "preview" ? "preview" : "main";
 const subscriptions = new Map<string, Set<(payload: unknown) => void>>();
 let copyCount = 0;
 document.documentElement.dataset.copyCount = "0";
+document.documentElement.dataset.menuCount = "0";
+let menuCount = 0;
+let savedShortcuts: Record<string, string> = {};
+window.addEventListener("test-native-menu-key", () => dispatch("native-menu-key", null));
 
 function sample(id: string): ClipboardItem {
   const timestamp = 1_700_000_000_000;
@@ -27,6 +31,10 @@ function sample(id: string): ClipboardItem {
 function dispatch(name: string, payload: unknown) {
   for (const callback of subscriptions.get(name) ?? []) callback(payload);
 }
+let deleted: DeletedItem[] = params.has("deleted") ? ["trash-first", "trash-second"].map(id => ({
+  ...sample(id), original_timestamp: 1000, deleted_at: Date.now() + 600_000,
+})) : [];
+let history = [sample("first"), sample("second")];
 export async function listen<T>(name: string, callback: (event: { payload: T }) => void) {
   const handler = (payload: unknown) => callback({ payload: payload as T });
   const set = subscriptions.get(name) ?? new Set<(payload: unknown) => void>();
@@ -55,16 +63,37 @@ export const getCurrentWindow = () => ({
 export async function invoke<T = unknown>(command: string, args?: Record<string, unknown>): Promise<T> {
   let result: unknown;
   switch (command) {
-    case "get_history": result = [sample("first"), sample("second")]; break;
-    case "get_deleted": result = []; break;
-    case "get_settings": result = { max_history: 100, delete_immediately: false, delete_ttl_seconds: 60, shortcuts: {} }; break;
+    case "get_history": result = history; break;
+    case "get_deleted": result = deleted; break;
+    case "restore_from_deleted": {
+      const restored = deleted.find(item => item.id === args?.id);
+      if (!restored) throw new Error("Deleted item not found");
+      result = { ...sample(restored.id), timestamp: restored.original_timestamp };
+      deleted = deleted.filter(item => item.id !== restored.id);
+      history = [...history, result as ClipboardItem];
+      break;
+    }
+    case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
+    case "get_settings": result = { max_history: 100, delete_immediately: false, delete_ttl_seconds: 60, shortcuts: savedShortcuts }; break;
+    case "save_settings_cmd": savedShortcuts = (args?.settings as { shortcuts: Record<string, string> }).shortcuts; break;
+    case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
     case "is_pointer_held": result = false; break;
-    case "select_item": document.documentElement.dataset.copyCount = String(++copyCount); break;
+    case "select_item":
+      {
+        const restored = deleted.find(item => item.id === args?.id);
+        if (restored) {
+          deleted = deleted.filter(item => item.id !== restored.id);
+          history = [{ ...sample(restored.id), timestamp: Date.now() }, ...history];
+        }
+      }
+      document.documentElement.dataset.copyCount = String(++copyCount);
+      document.documentElement.dataset.lastCopyId = String(args?.id);
+      break;
     case "set_pinned": result = args?.pinned; break;
     case "set_listening_paused": result = args?.paused; break;
     case "set_interacting": result = args?.interacting; break;
     case "preview_hide": case "preview_show": case "preview_update": case "preview_position": case "preview_set_size":
-    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": case "save_settings_cmd": break;
+    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": break;
     default: throw new Error(`Unexpected native command in browser layout test: ${command}`);
   }
   return result as T;

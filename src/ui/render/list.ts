@@ -80,9 +80,6 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
         card.appendChild(content);
       }
       card.onclick = () => {
-        if (getState().currentFilter === "deleted") {
-          return;
-        }
         actions.selectItem(actualItem.id);
       };
       // Hover is one of the two traversals of the same flow: it moves the

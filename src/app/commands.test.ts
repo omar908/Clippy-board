@@ -32,9 +32,13 @@ describe("application command availability", () => {
     await commands.execute("item.delete");
     expect(history.deleteItem).toHaveBeenCalledExactlyOnceWith("first");
     store.set({ currentFilter: "deleted", deletedItems: [{ ...item, deleted_at: 2, original_timestamp: 1 }] });
-    expect(await commands.execute("item.copy", "first")).toBe(false);
+    expect(await commands.execute("item.copy", "first")).toBe(true);
     expect(await commands.execute("item.pin", "first")).toBe(false);
-    expect(await commands.execute("item.delete", "first")).toBe(false);
+    expect(await commands.execute("item.delete", "first")).toBe(true);
+    expect(history.deletePermanentlyFromDeleted).toHaveBeenCalledExactlyOnceWith("first");
+    expect(history.deleteItem).toHaveBeenCalledTimes(1);
+    expect(await commands.execute("item.copy", "unknown")).toBe(false);
+    expect(await commands.execute("item.delete", "unknown")).toBe(false);
     expect(await commands.execute("item.restore", "unknown")).toBe(false);
     await commands.execute("item.restore", "first");
     expect(history.restoreFromDeleted).toHaveBeenCalledExactlyOnceWith("first");

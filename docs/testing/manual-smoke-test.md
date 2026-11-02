@@ -33,6 +33,9 @@ to be mode-specific.
 - [ ] Clicking outside closes it.
 - [ ] With the window pinned, clicking outside does **not** close it.
 - [ ] Restart the app: history is still there, newest first.
+- [ ] Launch the same executable again with the original hidden, visible, and
+      minimized: the original comes forward, the second process exits, and
+      there is still only one tray icon and clipboard monitor.
 
 ## 2. Selection model
 
@@ -43,6 +46,20 @@ to be mode-specific.
 - [ ] Moving the pointer after arrowing re-engages hover.
 - [ ] `Enter` copies the highlighted item and closes the window.
 - [ ] Clicking a card copies that card directly.
+- [ ] Tap and release `Alt`, then use arrows: selection keeps moving without
+      opening the Windows Restore/Move/Size/Close menu. Repeat in the separate
+      preview window. `Alt+P` still pins; `Alt+Space` opens the native menu.
+- [ ] In Deleted, `Enter` and card clicks restore and copy the item: it leaves
+      Deleted and appears at the top of All (below pinned entries). The Restore
+      button returns it to its original timestamp position without copying.
+      `Delete` removes it permanently; a rebound
+      Delete shortcut works too. Pin remains unavailable for Deleted items.
+- [ ] `Ctrl+R` restores the selected Deleted item without copying and keeps its
+      original timestamp position. It does nothing in other tabs or while typing.
+- [ ] Settings exposes Restore and Window menu with `Ctrl+R` and `Alt+Space`
+      defaults. Record new bindings, Save, and verify old bindings stop working.
+      Clearing disables them; Reset restores defaults. Repeat from the separate
+      preview: Restore targets the main selection, Window menu opens for preview.
 - [ ] A copied/moved item jumps to the top and the highlight follows it.
 - [ ] Typing in search filters; the preview follows the new top selection.
 - [ ] Hovering window chrome (header, footer, search) never opens the preview.
