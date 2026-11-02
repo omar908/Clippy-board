@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Accepted:** 2026-11-02
+**Sizing extension:** [TDD-0003](0003-adaptive-preview-sizing.md), accepted 2026-11-02. The fixed-width behavior described below records the original baseline; the extension defines current sizing.
 **Related decisions:** [ADR-0007](../adr/0007-preview-separate-window-with-dock-fallback.md),
 [ADR-0006](../adr/0006-suppress-layout-induced-hover-during-resize.md),
 [ADR-0002](../adr/0002-popup-hide-on-blur-with-interaction-guard.md)

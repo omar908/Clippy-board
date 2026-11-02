@@ -36,7 +36,7 @@ export function createPreviewController(host: PreviewHost, ports: PreviewPorts, 
     else await ports.update(item);
     if (valid(token)) renderedId = item.id;
   }
-  async function apply(placement: Placement, token: number) {
+  async function apply(placement: Placement, token: number, scale: number) {
     if (!valid(token)) return;
     let item = host.getSelected();
     if (!item) { dismiss(); return; }
@@ -48,7 +48,10 @@ export function createPreviewController(host: PreviewHost, ports: PreviewPorts, 
         // The selection can move while the native operation is pending.
         item = host.getSelected();
         if (!item) { dismiss(); return; }
-        view.setDocked(true);
+      }
+      view.setLayout({ width: placement.width / scale, compact: Boolean(placement.compact) });
+      view.setDocked(true);
+      if (mode !== "docked") {
         view.render(item);
         mode = "docked";
         renderedId = item.id;
@@ -69,7 +72,7 @@ export function createPreviewController(host: PreviewHost, ports: PreviewPorts, 
     const geometry = await ports.geometry();
     if (!valid(token)) return;
     const placement = resolveGeometryPlacement(geometry, view.width());
-    await enqueue(() => apply(placement, token));
+    await enqueue(() => apply(placement, token, geometry.scale));
   }
   function dismiss() {
     const wasOpen = open;
@@ -103,6 +106,7 @@ export function createPreviewController(host: PreviewHost, ports: PreviewPorts, 
     }
   }
   lifetime.own(view.onSurface("mouseenter", grace.cancel));
+  lifetime.own(view.onBack(dismiss));
   lifetime.own(view.onSurface("mouseleave", () => { if (open) grace.start(); }));
   lifetime.listen(ports.listen("preview-ready", () => {
     const item = host.getSelected();

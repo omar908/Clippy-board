@@ -115,9 +115,19 @@ hover -> preview), and stops the app. Add `-Seed` only on a disposable
 machine: it replaces the history with four synthetic samples, and the smoke
 then hovers the known `smoke-text-long` card.
 
-CI (`.github/workflows/ci.yml`) runs all of the above on Windows for every push
-and pull request. Release bundles are built only for `v*` tags or a manual
-`workflow_dispatch`, so ordinary pushes do not produce release artifacts.
+CI (`.github/workflows/ci.yml`) runs all of the above on Windows for pushes to
+`main` and pull requests targeting `main`. A version bump merged into `main`
+automatically builds installers and publishes a GitHub Release with a matching
+`vX.Y.Z` tag pointing to the tested merge/squash commit, after all CI checks pass.
+Unchanged versions and PR runs do not publish releases. Matching version-tag
+pushes can also publish; manual `workflow_dispatch` runs only produce artifacts.
+
+Keep `package.json`, both npm root versions in `package-lock.json`,
+`src-tauri/tauri.conf.json`, the app package in `Cargo.toml`/`Cargo.lock`, and the
+About label in `index.html` synchronized. Run `node scripts/release-plan.mjs --check`
+and `npm run test:release` to validate release metadata and policy. Existing tags
+are never moved to another commit. If a release job fails, rerun the original
+workflow; a tag already targeting that same commit is safe to reuse.
 
 To fill the clipboard with a varied sample set (text of every length, images from
 1×1 to a 3 MB PNG, file drops):
@@ -223,6 +233,7 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0006](./docs/adr/0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize |
 | [0007](./docs/adr/0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate always-on-top window, docking when there is no room |
 | [0008](./docs/adr/0008-shared-commands-and-shortcut-router.md) | Shared commands and a single shortcut router — accepted |
+| [0009](./docs/adr/0009-adaptive-preview-widths.md) | Adaptive preview widths with compact fallback — accepted |
 
 Implementation designs and extension recipes live in
 [`docs/tdd/`](./docs/tdd/README.md). Start with

@@ -71,3 +71,4 @@ this decision imposes on future work.
 | [0006](0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize | Accepted |
 | [0007](0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate window, docking inside when there is no room | Accepted |
 | [0008](0008-shared-commands-and-shortcut-router.md) | Shared commands and a single shortcut router | Accepted |
+| [0009](0009-adaptive-preview-widths.md) | Adaptive preview widths with a compact fallback | Accepted |

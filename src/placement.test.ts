@@ -12,12 +12,48 @@ function place(overrides: Partial<PlacementInput> = {}) {
     main: { x: 100, y: 100, width: 800, height: 600 },
     workArea: WORK_AREA,
     previewWidth: PREVIEW_WIDTH,
+    minimumPreviewWidth: 280,
+    minimumListWidth: 362,
     gap: GAP,
     ...overrides,
   });
 }
 
 describe("resolvePreviewPlacement", () => {
+  it("prefers a full-sized left preview over shrinking on the right", () => {
+    expect(place({ main: { x: 600, y: 100, width: 900, height: 600 } }))
+      .toMatchObject({ docked: false, x: 112, width: 480 });
+  });
+
+  it("shrinks to the larger available side and keeps a right-side tie", () => {
+    // Neither side fits 480; the right has 392px versus 292px on the left.
+    expect(place({ main: { x: 300, y: 100, width: 600, height: 600 }, workArea: { x: 0, y: 0, width: 1300, height: 900 } }))
+      .toMatchObject({ docked: false, x: 908, width: 392 });
+    expect(place({ main: { x: 400, y: 100, width: 600, height: 600 }, workArea: { x: 0, y: 0, width: 1300, height: 900 } }))
+      .toMatchObject({ docked: false, x: 0, width: 392 });
+    expect(place({ main: { x: 350, y: 100, width: 600, height: 600 }, workArea: { x: 0, y: 0, width: 1300, height: 900 } }))
+      .toMatchObject({ docked: false, x: 958, width: 342 });
+  });
+
+  it("accepts an exact minimum side fit and docks below the minimum", () => {
+    expect(place({ main: { x: 100, y: 0, width: 700, height: 600 }, workArea: { x: 0, y: 0, width: 1088, height: 900 } }))
+      .toMatchObject({ docked: false, x: 808, width: 280 });
+    expect(place({ main: { x: 100, y: 0, width: 700, height: 600 }, workArea: { x: 0, y: 0, width: 1087, height: 900 } }))
+      .toMatchObject({ docked: true, width: 338 });
+  });
+
+  it("uses compact preview when neither two columns nor a separate preview can fit", () => {
+    const p = place({ main: { x: 220, y: 0, width: 460, height: 600 }, workArea: { x: 0, y: 0, width: 900, height: 800 } });
+    expect(p).toMatchObject({ docked: true, compact: true, width: 460 });
+  });
+
+  it("clamps a separate preview to the work area without overlapping an offscreen main window", () => {
+    expect(place({ main: { x: -1000, y: 0, width: 500, height: 600 } }))
+      .toMatchObject({ docked: false, x: 0, width: 480 });
+    expect(place({ main: { x: 2400, y: 0, width: 500, height: 600 } }))
+      .toMatchObject({ docked: false, x: 1440, width: 480 });
+  });
+
   it("places the preview to the right when it fits", () => {
     expect(place()).toEqual({ docked: false, x: 908, y: 100, width: 480, height: 600 });
   });

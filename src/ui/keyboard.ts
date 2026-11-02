@@ -23,7 +23,11 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
     manager.register({
       id: definition.id, combo: definition.combo,
       allowInSearchInput: definition.scope === "search" || definition.scope === "tabs" || definition.scope === "escape",
-      when: () => !settingsOpen() || definition.scope === "escape",
+      when: () => {
+        // Enter activates the compact preview's Back button natively.
+        if (definition.id === "item.copy" && active()?.id === "preview-back") return false;
+        return !settingsOpen() || definition.scope === "escape";
+      },
       stopImmediatePropagation: true,
       action: () => {
         if (isPreview) {

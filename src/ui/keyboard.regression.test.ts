@@ -145,6 +145,17 @@ async function setup() {
 const callsTo = (command: string) => vi.mocked(invoke).mock.calls.filter(call => call[0] === command);
 
 describe("keyboard integration regression contracts", () => {
+  it("leaves Enter available to activate the compact preview's Back button", async () => {
+    const { dispatch } = await setup();
+    const back = new ElementPort();
+    back.id = "preview-back";
+    back.focus();
+    const event = dispatch("Enter");
+    await settleKeyboard();
+    expect(event.defaultPrevented).toBe(false);
+    expect(callsTo("select_item")).toEqual([]);
+  });
+
   it("does not fetch settings for individual keypresses", async () => {
     const { dispatch } = await setup();
     dispatch("ArrowDown");
