@@ -82,17 +82,7 @@ export function bindWindowControls(store: Store, elements: AppElements, selectio
     e.stopPropagation();
     const win = getCurrentWindow();
     try {
-      if (typeof (win as any).toggleMaximize === "function") {
-        await (win as any).toggleMaximize();
-        return;
-      }
-      const isMax = await win.isMaximized();
-      if (isMax) {
-        await win.unmaximize();
-      }
-      else {
-        await win.maximize();
-      }
+      await win.toggleMaximize();
     }
     catch (err) {
       console.error("Failed to toggle maximize:", err);

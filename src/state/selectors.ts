@@ -6,16 +6,14 @@ export function deriveHistoryView(state: Readonly<AppState>) {
   const query = searchQuery.trim().toLowerCase();
   let filteredHistory: DisplayItem[];
   if (currentFilter === "deleted") {
-    filteredHistory = state.deletedItems.filter((item: any) => {
+    filteredHistory = state.deletedItems.filter(item => {
       if (!query) return true;
-      // Deleted entries may arrive flattened from the backend.
-      const payload = item.payload ?? item;
       if (item.type === "text") {
-        return (payload.text || payload.preview || "").toLowerCase().includes(query);
+        return (item.payload.text || item.payload.preview || "").toLowerCase().includes(query);
       }
       if (item.type === "file") {
-        return payload.preview?.toLowerCase().includes(query) ||
-          payload.paths?.some((path: string) => path.toLowerCase().includes(query));
+        return item.payload.preview.toLowerCase().includes(query) ||
+          item.payload.paths.some(path => path.toLowerCase().includes(query));
       }
       if (item.type === "image") return "image".includes(query);
       return true;

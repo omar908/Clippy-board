@@ -24,7 +24,8 @@ Migrate all UI rendering logic from `main.ts` into modular `src/ui/` modules wit
 
 ### Step 3: Create render modules
 - [x] `src/ui/render/header.ts` - header actions, counts
-- [x] `src/ui/render/settings.ts` - settings page rendering
+- [x] Settings page rendering and form binding are handled by `src/ui/settings.ts`;
+      the unused `src/ui/render/settings.ts` prep helper was removed during type cleanup.
 - [x] `src/ui/render/empty.ts` - empty state
 - [x] Migrate small render functions first
 

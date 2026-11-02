@@ -112,7 +112,7 @@ export function createHistoryController(store: Store, elements: AppElements, cal
       filterAndRender();
       return;
     }
-    const ids = (store.get().filteredHistory as any[]).filter((i) => !i.pinned).map((i) => i.id);
+    const ids = store.get().filteredHistory.filter((i) => !i.pinned).map((i) => i.id);
     if (ids.length === 0)
       return;
     let ttlSeconds = 60;
@@ -138,7 +138,7 @@ export function createHistoryController(store: Store, elements: AppElements, cal
       clearBtn.title = clearable === 0 ? "Nothing to delete permanently" : "Delete permanently from Deleted tab";
       return;
     }
-    const clearable = (store.get().filteredHistory as any[]).filter((i) => !i.pinned).length;
+    const clearable = store.get().filteredHistory.filter((i) => !i.pinned).length;
     const scope = store.get().searchQuery.trim()
       ? "matching items"
       : store.get().currentFilter === "all"

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ClipboardItem } from "./types";
+import { normalizeClipboardItem } from "./api/normalize";
 import { createAppCommands } from "./app/commands";
 import { store } from "./state/store";
 import { createHistoryController } from "./app/history";
@@ -44,8 +45,10 @@ bindWindowControls(store, elements, selection, commands);
 
 // Setup real-time clipboard listener
 async function setupListener() {
-  await listen<ClipboardItem>("clipboard-updated", (event) => {
-    const newItem = event.payload;
+  await listen<unknown>("clipboard-updated", (event) => {
+    let newItem: ClipboardItem;
+    try { newItem = normalizeClipboardItem(event.payload); }
+    catch (error) { console.error("Invalid clipboard update:", error); return; }
     // If item was in deleted, remove it from deleted
     store.set({ deletedItems: store.get().deletedItems.filter((i) => i.id !== newItem.id) });
     // Prepend new item

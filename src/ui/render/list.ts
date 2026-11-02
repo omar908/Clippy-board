@@ -30,7 +30,7 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
   }
   emptyState.style.display = "none";
   historyList.innerHTML = "";
-  state.filteredHistory.forEach((item: any, index) => {
+  state.filteredHistory.forEach((item, index) => {
     try {
       const actualItem = item;
       const type = actualItem.type;
@@ -45,7 +45,7 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
       badge.textContent = type;
       const time = document.createElement("span");
       time.className = "item-time";
-      renderTime(actualItem, time, state.currentFilter);
+      renderTime(actualItem, time);
       if (actualItem.pinned) {
         const pinBadge = document.createElement("span");
         pinBadge.className = "item-pin-badge";
@@ -72,11 +72,11 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
         const content = document.createElement("div");
         content.className = `item-content-${type}`;
         if (type === "text")
-          renderTextContent(actualItem, content);
+          renderTextContent(actualItem.payload, content);
         else if (type === "image")
-          renderImageContent(actualItem, content);
+          renderImageContent(actualItem.payload, content);
         else
-          renderFileContent(actualItem, content);
+          renderFileContent(actualItem.payload, content);
         card.appendChild(content);
       }
       card.onclick = () => {
