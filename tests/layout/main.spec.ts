@@ -1,5 +1,64 @@
 import { test, expect, openPreview } from "./helpers";
 
+test("Restore defaults to Ctrl+R and can be overridden in Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 580 });
+  await page.goto("/?mode=main&deleted=1");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.locator('[data-filter="deleted"]').click();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Control+r");
+  await expect(page.locator(".history-item")).toHaveCount(1);
+  await expect(page.locator("html")).toHaveAttribute("data-copy-count", "0");
+  await page.locator("#settings-btn").click();
+  const field = page.locator("#shortcut-item-restore");
+  await expect(field).toHaveValue("Ctrl+R");
+  await field.focus();
+  await page.keyboard.press("Control+k");
+  await page.locator("#settings-save-btn").click();
+  await page.locator("#settings-back-btn").click();
+  await page.keyboard.press("Control+k");
+  await expect(page.locator(".history-item")).toHaveCount(0);
+  await expect(page.locator("html")).toHaveAttribute("data-copy-count", "0");
+  await page.locator('[data-filter="all"]').click();
+  await expect(page.locator(".history-item")).toHaveCount(4);
+});
+
+test("native Alt+Space routing honors menu recording, overrides, and disabling", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {} });
+    Object.defineProperty(navigator, "platform", { value: "Win32" });
+  });
+  await page.goto("/?mode=main");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  // Real DOM key is deferred to the host; its forwarded key executes once.
+  await page.keyboard.press("Alt+Space");
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "0");
+  const forward = () => page.evaluate(() => window.dispatchEvent(new Event("test-native-menu-key")));
+  await forward();
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "1");
+  await page.locator("#settings-btn").click();
+  const field = page.locator("#shortcut-window-menu");
+  await expect(field).toHaveValue("Alt+Space");
+  await field.focus();
+  await page.keyboard.press("Backspace");
+  await forward();
+  await expect(field).toHaveValue("Alt+Space");
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "1");
+  await page.keyboard.press("Control+m");
+  await page.locator("#settings-save-btn").click();
+  await page.locator("#settings-back-btn").click();
+  await forward();
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "1");
+  await page.keyboard.press("Control+m");
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "2");
+  await page.locator("#settings-btn").click();
+  await field.focus(); await page.keyboard.press("Backspace");
+  await page.locator("#settings-save-btn").click();
+  await page.locator("#settings-back-btn").click();
+  await forward(); await page.keyboard.press("Control+m");
+  await expect(page.locator("html")).toHaveAttribute("data-menu-count", "2");
+});
+
 test("Restore button keeps original order and does not copy", async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 580 });
   await page.goto("/?mode=main&deleted=1");

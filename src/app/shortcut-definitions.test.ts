@@ -11,5 +11,9 @@ describe("saved shortcut settings", () => {
     expect(() => validateShortcutSettings({ pause: "Ctrl+F" })).toThrow("both use Ctrl+F");
     expect(() => validateShortcutSettings({ search: "ArrowDown" })).toThrow("both use ArrowDown");
     expect(() => validateShortcutSettings({ search: "Ctrl+K", pause: "Ctrl+F" })).not.toThrow();
+    expect(() => validateShortcutSettings({ restore: "Alt+Space" })).toThrow("both use Alt+Space");
+    expect(() => validateShortcutSettings({ windowMenu: "Ctrl+R" })).toThrow("both use Ctrl+R");
+    expect(bindingsFromSettings({ restore: "", windowMenu: "Ctrl+M" }))
+      .toEqual({ "item.restore": null, "window.menu": "Ctrl+M" });
   });
 });

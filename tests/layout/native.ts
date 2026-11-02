@@ -7,6 +7,10 @@ const label = params.get("mode") === "preview" ? "preview" : "main";
 const subscriptions = new Map<string, Set<(payload: unknown) => void>>();
 let copyCount = 0;
 document.documentElement.dataset.copyCount = "0";
+document.documentElement.dataset.menuCount = "0";
+let menuCount = 0;
+let savedShortcuts: Record<string, string> = {};
+window.addEventListener("test-native-menu-key", () => dispatch("native-menu-key", null));
 
 function sample(id: string): ClipboardItem {
   const timestamp = 1_700_000_000_000;
@@ -70,7 +74,9 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     }
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
-    case "get_settings": result = { max_history: 100, delete_immediately: false, delete_ttl_seconds: 60, shortcuts: {} }; break;
+    case "get_settings": result = { max_history: 100, delete_immediately: false, delete_ttl_seconds: 60, shortcuts: savedShortcuts }; break;
+    case "save_settings_cmd": savedShortcuts = (args?.settings as { shortcuts: Record<string, string> }).shortcuts; break;
+    case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
     case "is_pointer_held": result = false; break;
     case "select_item":
       {
@@ -87,7 +93,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "set_listening_paused": result = args?.paused; break;
     case "set_interacting": result = args?.interacting; break;
     case "preview_hide": case "preview_show": case "preview_update": case "preview_position": case "preview_set_size":
-    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": case "save_settings_cmd": break;
+    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": break;
     default: throw new Error(`Unexpected native command in browser layout test: ${command}`);
   }
   return result as T;

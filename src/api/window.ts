@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 
+export async function showWindowMenu() {
+  return invoke<void>("show_window_menu");
+}
+
 export async function hideWindow() {
   return invoke<void>("hide_window");
 }

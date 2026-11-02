@@ -4,6 +4,11 @@ pub mod storage;
 mod window_menu;
 mod item_selection;
 
+#[tauri::command]
+fn show_window_menu(window: tauri::WebviewWindow) -> Result<(), String> {
+    window_menu::show(&window)
+}
+
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -856,6 +861,7 @@ pub fn run() {
             delete_permanently_from_deleted,
             purge_expired_deleted,
             hide_window,
+            show_window_menu,
             show_window,
             set_pinned,
             get_pinned,

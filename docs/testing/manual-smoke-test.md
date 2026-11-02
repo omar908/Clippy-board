@@ -54,6 +54,12 @@ to be mode-specific.
       button returns it to its original timestamp position without copying.
       `Delete` removes it permanently; a rebound
       Delete shortcut works too. Pin remains unavailable for Deleted items.
+- [ ] `Ctrl+R` restores the selected Deleted item without copying and keeps its
+      original timestamp position. It does nothing in other tabs or while typing.
+- [ ] Settings exposes Restore and Window menu with `Ctrl+R` and `Alt+Space`
+      defaults. Record new bindings, Save, and verify old bindings stop working.
+      Clearing disables them; Reset restores defaults. Repeat from the separate
+      preview: Restore targets the main selection, Window menu opens for preview.
 - [ ] A copied/moved item jumps to the top and the highlight follows it.
 - [ ] Typing in search filters; the preview follows the new top selection.
 - [ ] Hovering window chrome (header, footer, search) never opens the preview.

@@ -12,20 +12,21 @@ export type AppCommandArgs = {
   "item.copy": [id?: string];
   "item.pin": [id?: string];
   "item.delete": [id?: string];
-  "item.restore": [id: string];
+  "item.restore": [id?: string];
   "item.deletePermanent": [id: string];
   "history.clear": [];
   "list.navigate": [key: string];
   "tabs.cycle": [delta: number];
   "window.hide": [];
   "window.pin": [];
+  "window.menu": [];
   "settings.close": [];
 };
 export type AppCommands = CommandRegistry<AppCommandArgs>;
 
 export function createAppCommands(
   store: Store, elements: AppElements, history: HistoryController, selection: SelectionController,
-  ports = { setListeningPaused: api.setListeningPaused, setPinned: api.setPinned, hideWindow: api.hideWindow, dismissPreview: previewDismiss }
+  ports = { setListeningPaused: api.setListeningPaused, setPinned: api.setPinned, hideWindow: api.hideWindow, dismissPreview: previewDismiss, showWindowMenu: api.showWindowMenu }
 ) {
   const commands: AppCommands = new CommandRegistry();
   const target = (id?: string): DisplayItem | undefined => {
@@ -59,6 +60,7 @@ export function createAppCommands(
       ports.dismissPreview();
     }
   });
+  commands.register("window.menu", { exclusive: true, execute: ports.showWindowMenu });
   commands.register("settings.close", {
     execute: () => {
       elements.settingsPage.style.display = "none";
@@ -83,7 +85,11 @@ export function createAppCommands(
     }
   });
   const isDeleted = (id: string) => store.get().deletedItems.some(item => item.id === id);
-  commands.register("item.restore", { enabled: isDeleted, execute: id => history.restoreFromDeleted(id) });
+  commands.register("item.restore", {
+    exclusive: true,
+    enabled: id => store.get().currentFilter === "deleted" && Boolean(target(id)),
+    execute: id => history.restoreFromDeleted(target(id)!.id),
+  });
   commands.register("item.deletePermanent", { enabled: isDeleted, execute: id => history.deletePermanentlyFromDeleted(id) });
   commands.register("history.clear", { exclusive: true, execute: history.clearView });
   commands.register("list.navigate", { execute: selection.handleListKey });
