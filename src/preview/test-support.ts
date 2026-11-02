@@ -38,6 +38,10 @@ export function previewFixture() {
   } satisfies PreviewPorts;
   const view = {
     width: vi.fn(() => 480), render: vi.fn(), clear: vi.fn(), setDocked: vi.fn(),
+    setLayout: vi.fn(),
+    onBack: (callback: () => void) => {
+      domEvents.set("back", callback); return () => { domEvents.delete("back"); };
+    },
     setPreviewWindow: vi.fn(), hovered: vi.fn(() => true),
     onSurface: (name: string, callback: () => void) => {
       domEvents.set(`surface.${name}`, callback);

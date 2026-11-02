@@ -6,6 +6,7 @@ class ElementPort {
   className = "";
   textContent = "";
   hovered = true;
+  style = { setProperty: vi.fn(), removeProperty: vi.fn() };
   private classes = new Set<string>();
   classList = { add: (name: string) => this.classes.add(name), remove: (name: string) => this.classes.delete(name), contains: (name: string) => this.classes.has(name) };
   listeners = new Map<string, () => void>();

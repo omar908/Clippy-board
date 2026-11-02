@@ -6,6 +6,7 @@ export function createDomPreviewView(): PreviewView {
   const body = document.getElementById("preview-body")!;
   const panel = document.getElementById("preview-panel");
   const surface = document.querySelector<HTMLElement>(".clippy-popup");
+  const back = document.getElementById("preview-back");
   let disposeContent: Dispose = () => {};
   function on(element: HTMLElement | null, name: string, callback: () => void): Dispose {
     element?.addEventListener(name, callback);
@@ -25,7 +26,17 @@ export function createDomPreviewView(): PreviewView {
       if (docked) panel?.classList.add("open");
       else panel?.classList.remove("open");
       panel?.setAttribute("aria-hidden", String(!docked));
+      if (!docked) {
+        surface?.classList.remove("preview-compact");
+        panel?.style.removeProperty("--resolved-preview-width");
+      }
     },
+    setLayout({ width, compact }) {
+      panel?.style.setProperty("--resolved-preview-width", `${width}px`);
+      if (compact) surface?.classList.add("preview-compact");
+      else surface?.classList.remove("preview-compact");
+    },
+    onBack: callback => on(back, "click", callback),
     setPreviewWindow: () => document.body.classList.add("preview-window"),
     hovered: () => Boolean(surface?.matches(":hover")),
     onSurface: (name, callback) => on(surface, name, callback),

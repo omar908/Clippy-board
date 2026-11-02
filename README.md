@@ -223,6 +223,7 @@ Significant technical decisions are recorded in [`docs/adr/`](./docs/adr/README.
 | [0006](./docs/adr/0006-suppress-layout-induced-hover-during-resize.md) | Suppress layout-induced hover while and after a native resize |
 | [0007](./docs/adr/0007-preview-separate-window-with-dock-fallback.md) | Full-content preview in a separate always-on-top window, docking when there is no room |
 | [0008](./docs/adr/0008-shared-commands-and-shortcut-router.md) | Shared commands and a single shortcut router — accepted |
+| [0009](./docs/adr/0009-adaptive-preview-widths.md) | Adaptive preview widths with compact fallback — accepted |
 
 Implementation designs and extension recipes live in
 [`docs/tdd/`](./docs/tdd/README.md). Start with

@@ -12,6 +12,64 @@ function setup() {
 }
 
 describe("main preview controller", () => {
+  it("resizes an adaptive separate preview without repeatedly showing it or rerendering content", async () => {
+    const f = setup();
+    f.geometry.workArea!.width = 900;
+    f.controller.selectionChanged();
+    await settlePreview();
+    expect(f.ports.show).toHaveBeenCalledWith(expect.objectContaining({ docked: false, width: 332 }), textItem("first"));
+    f.geometry.main.x = 0;
+    f.move.callback();
+    await settlePreview();
+    expect(f.ports.move).toHaveBeenCalledWith(expect.objectContaining({ width: 432 }));
+    f.geometry.workArea!.width = 1200;
+    f.move.callback();
+    await settlePreview();
+    expect(f.ports.move).toHaveBeenLastCalledWith(expect.objectContaining({ width: 480 }));
+    expect(f.ports.show).toHaveBeenCalledOnce();
+    expect(f.view.render).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+
+  it("resizes the docked column, enters compact mode, and returns to history on Back", async () => {
+    const f = setup();
+    f.geometry.main = { x: 0, y: 0, width: 700, height: 580 };
+    f.geometry.workArea!.width = 700;
+    f.controller.selectionChanged();
+    await settlePreview();
+    expect(f.view.setLayout).toHaveBeenLastCalledWith({ width: 338, compact: false });
+    expect(f.view.render).toHaveBeenCalledOnce();
+    f.geometry.main.width = 740;
+    f.geometry.workArea!.width = 740;
+    f.resize.callback();
+    await settlePreview();
+    expect(f.view.setLayout).toHaveBeenLastCalledWith({ width: 378, compact: false });
+    f.geometry.main.width = 600;
+    f.geometry.workArea!.width = 600;
+    f.resize.callback();
+    await settlePreview();
+    expect(f.view.setLayout).toHaveBeenLastCalledWith({ width: 600, compact: true });
+    expect(f.view.render).toHaveBeenCalledOnce();
+    f.domEvents.get("back")!();
+    await settlePreview();
+    expect(f.view.setDocked).toHaveBeenLastCalledWith(false);
+    expect(f.ports.show).not.toHaveBeenCalled();
+    f.controller.refresh();
+    await settlePreview();
+    expect(f.ports.show).not.toHaveBeenCalled();
+    f.controller.dispose();
+  });
+
+  it("converts a docked physical width to CSS logical pixels once", async () => {
+    const f = setup();
+    f.geometry.scale = 2.25;
+    f.geometry.main = { x: 0, y: 0, width: 2560, height: 1560 };
+    f.controller.selectionChanged();
+    await settlePreview();
+    expect(f.view.setLayout).toHaveBeenCalledWith({ width: 480, compact: false });
+    f.controller.dispose();
+  });
+
   it("uses the latest selection when opening geometry finishes", async () => {
     const f = setup();
     const geometry = deferred<typeof f.geometry>();

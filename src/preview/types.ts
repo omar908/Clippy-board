@@ -31,6 +31,8 @@ export interface PreviewView {
   render(item: ClipboardItem): void;
   clear(): void;
   setDocked(docked: boolean): void;
+  setLayout(layout: { width: number; compact: boolean }): void;
+  onBack(callback: () => void): Dispose;
   setPreviewWindow(): void;
   hovered(): boolean;
   onSurface(name: "mouseenter" | "mouseleave", callback: () => void): Dispose;

@@ -55,8 +55,7 @@
   /* Effects */
   --shadow-window: 0 16px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
 
-  /* Layout — the docked panel (styles.css) and the separate preview window
-     (preview.ts) share this single width. */
+  /* Preferred logical width; the geometry resolver may choose a smaller one. */
   --preview-width: 480px;
 
   --radius-sm: 6px;
@@ -335,10 +334,7 @@ body.paused .app-title::after {
    window has room; the separate window is the normal case). */
 .preview-panel {
   display: none;
-  /* Fixed column width, shared with the separate preview window: preview.ts
-     reads --preview-width for its geometry, so the two presentations cannot
-     drift apart. */
-  flex: 0 0 var(--preview-width);
+  flex: 0 0 var(--resolved-preview-width, var(--preview-width));
   flex-direction: column;
   min-width: 0;
   min-height: 0;
@@ -350,9 +346,34 @@ body.paused .app-title::after {
   display: flex;
 }
 
+.preview-toolbar { display: none; }
+.clippy-popup.preview-compact .list-column { display: none; }
+.clippy-popup.preview-compact .preview-panel.open {
+  flex: 1 1 auto;
+  border-left: none;
+}
+.clippy-popup.preview-compact .preview-toolbar {
+  display: flex;
+  flex: none;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.preview-back {
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.preview-back:hover { background: var(--overlay-4); }
+.preview-back:focus-visible { outline: 2px solid var(--accent-color); }
+
 .preview-header {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 9px 14px;
@@ -370,6 +391,7 @@ body.paused .app-title::after {
 
 .preview-body {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
