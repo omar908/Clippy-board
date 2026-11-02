@@ -37,7 +37,10 @@ export function createDomPreviewView(): PreviewView {
       else surface?.classList.remove("preview-compact");
     },
     onBack: callback => on(back, "click", callback),
-    setPreviewWindow: () => document.body.classList.add("preview-window"),
+    setPreviewWindow() {
+      document.body.classList.add("preview-window");
+      panel?.setAttribute("aria-hidden", "false");
+    },
     hovered: () => Boolean(surface?.matches(":hover")),
     onSurface: (name, callback) => on(surface, name, callback),
     onPanel: (name, callback) => on(panel, name, callback),

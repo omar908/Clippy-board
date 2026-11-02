@@ -1,0 +1,65 @@
+# Browser layout tests
+
+These Playwright tests render the production `index.html`, stylesheet, bootstrap,
+commands, keyboard handlers, and preview renderer in headless Chromium. The Vite
+configuration under `tests/layout/` substitutes only the native Tauri SDK modules
+with deterministic ports. It does not copy the app markup or alter production
+startup. The normal Vite/Tauri build uses the real SDK.
+
+## Run locally
+
+```powershell
+npm ci
+npx playwright install chromium
+npm run typecheck:layout
+npm run test:layout
+```
+
+The test runner starts and stops an isolated Vite server on `127.0.0.1:4174`.
+It refuses to reuse an existing server to avoid testing another checkout.
+`npm test` continues to run the unit/integration suites in `src`; browser tests
+run separately so the two runners do not collect each other's suites.
+
+## Coverage
+
+| Project | CSS viewport | Device pixel ratio | Presentation |
+|---|---|---:|---|
+| separate-minimum | 280×420 | 1 | Minimum-width separate preview |
+| separate-225-percent | 331×560 | 2.25 | Approximate logical width of the reported 225% case |
+| separate-preferred | 480×700 | 1.25 | Preferred-width separate preview |
+| docked | 700×580 | 1 | Two usable columns |
+| compact | 460×580 | 2 | Full-width preview and Back navigation |
+
+Across these cases, assertions check preview/header/control bounds, absence of
+unintended horizontal overflow, literal/scrollable long text, all file paths,
+image fit and zoom, and accessibility visibility. Main-window cases also exercise
+pointer/keyboard Back without copying, selection retention, and resize transitions
+between compact and docked using the actual application handlers.
+
+Tests fail on browser JavaScript errors and console errors. They use bounding-box
+invariants rather than pixel-perfect screenshot baselines, so ordinary cosmetic
+changes do not require updating reference images.
+
+## CI and failure diagnostics
+
+The existing Windows CI `test` job typechecks the harness, installs Chromium and
+runs `npm run test:layout` on main pushes, PRs targeting main, version-tag runs,
+and manual runs. The existing release jobs depend on that job, so a failing
+browser layout suite blocks release publication too.
+
+Failures retain screenshots and Playwright traces. CI uploads `playwright-report/`
+and `test-results/layout/` as `browser-layout-results` for seven days. Locally,
+inspect the HTML report with `npx playwright show-report` or open a trace using
+the path printed in the failed test output. Generated reports are gitignored.
+
+## Limits
+
+A Chromium device pixel ratio is not Windows display scaling. The suite uses
+representative logical viewport sizes and raster density; it cannot prove native
+window positioning, per-monitor DPI transitions, WebView2 focus handoff, tray
+behavior, or OS-level shortcuts. Those retain the existing native CDP smoke test
+and [manual smoke checks](manual-smoke-test.md).
+
+The broad resolution/scaling matrix remains in `src/preview/geometry.test.ts`.
+These browser tests complement it with real CSS layout and DOM interaction. The
+separate preview uses an isolated browser page, not a second native app window.
