@@ -13,7 +13,7 @@ import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindWindowControls } from "./ui/controls";
-import { initPreview } from "./preview";
+import { initPreview, disposePreview } from "./preview";
 
 const elements = getAppElements();
 const history = createHistoryController(store, elements, {
@@ -42,6 +42,7 @@ const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
 bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), () => { void commands.execute("settings.close"); });
 bindWindowControls(store, elements, selection, commands);
+window.addEventListener("beforeunload", () => disposePreview());
 
 // Setup real-time clipboard listener
 async function setupListener() {
