@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { ClipboardItem, DeletedItem } from "../types";
+import { normalizeClipboardItem, normalizeClipboardItems, normalizeDeletedItems } from "./normalize";
 
 export async function getHistory() {
-  return invoke<ClipboardItem[]>("get_history");
+  return normalizeClipboardItems(await invoke<unknown>("get_history"));
 }
 
 export async function getPinned() {
@@ -30,11 +30,11 @@ export async function clearHistory(ids?: string[] | null, ttlSeconds?: number) {
 }
 
 export async function getDeleted() {
-  return invoke<DeletedItem[]>("get_deleted");
+  return normalizeDeletedItems(await invoke<unknown>("get_deleted"));
 }
 
 export async function restoreFromDeleted(id: string) {
-  return invoke<ClipboardItem>("restore_from_deleted", { id });
+  return normalizeClipboardItem(await invoke<unknown>("restore_from_deleted", { id }));
 }
 
 export async function deletePermanentlyFromDeleted(id: string) {

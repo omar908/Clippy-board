@@ -4,7 +4,7 @@ import type { ClipboardItem } from "./types";
 const runtime = vi.hoisted(() => ({
   label: "main",
   handlers: new Map<string, () => void>(),
-  events: new Map<string, (event: { payload: ClipboardItem }) => void>(),
+  events: new Map<string, (event: { payload: unknown }) => void>(),
   invoke: vi.fn(),
   initPreview: vi.fn(),
   renderList: vi.fn(),
@@ -40,9 +40,28 @@ beforeEach(() => {
   runtime.invoke.mockResolvedValue([]);
   vi.stubGlobal("window", { addEventListener: (name: string, callback: () => void) => runtime.handlers.set(name, callback) });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("application startup", () => {
+  it("normalizes legacy live updates and ignores malformed updates without replacing valid state", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await import("./main");
+    runtime.handlers.get("DOMContentLoaded")!();
+    await vi.advanceTimersByTimeAsync(0);
+    const { store } = await import("./state/store");
+    const receive = runtime.events.get("clipboard-updated")!;
+    receive({ payload: { id: "legacy", timestamp: 1, type: "text", text: "hello", preview: "hello", char_count: 5, line_count: 1 } });
+    expect(store.get().history[0]).toEqual({ id: "legacy", timestamp: 1, type: "text", payload: {
+      text: "hello", preview: "hello", char_count: 5, line_count: 1,
+    } });
+    const previous = store.get();
+    runtime.renderList.mockClear();
+    receive({ payload: { id: "broken", timestamp: 1, type: "file", paths: [false] } });
+    expect(store.get()).toBe(previous);
+    expect(runtime.renderList).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith("Invalid clipboard update:", expect.any(TypeError));
+  });
+
   it("connects clipboard events to the store and renderer and keeps the history cap", async () => {
     await import("./main");
     runtime.handlers.get("DOMContentLoaded")!();

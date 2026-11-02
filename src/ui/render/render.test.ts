@@ -9,23 +9,23 @@ const element = () => ({ textContent: "", innerHTML: "", style: {} }) as HTMLEle
 afterEach(() => vi.unstubAllGlobals());
 
 describe("extracted renderers", () => {
-  it("keeps previews as literal text and supports flattened deleted items", () => {
+  it("keeps previews as literal text and preserves the full text fallback", () => {
     const target = element();
-    renderTextContent({ payload: { preview: "<b>preview</b>", text: "full text" } }, target);
+    renderTextContent({ preview: "<b>preview</b>", text: "full text", char_count: 9, line_count: 1 }, target);
     expect(target.textContent).toBe("<b>preview</b>");
     expect(target.innerHTML).toBe("");
     const text = "x".repeat(300);
-    renderTextContent({ text }, target);
+    renderTextContent({ text, preview: "", char_count: text.length, line_count: 1 }, target);
     expect(target.textContent).toBe(text);
   });
 
-  it("keeps detailed metadata for nested and flattened payloads", () => {
+  it("keeps detailed metadata for each canonical payload type", () => {
     const target = element();
-    renderItemMeta({ type: "text", payload: { char_count: 0, line_count: 1 } }, target);
+    renderItemMeta({ type: "text", payload: { text: "", preview: "", char_count: 0, line_count: 1 } }, target);
     expect(target.textContent).toBe("0 chars • 1 line");
-    renderItemMeta({ type: "image", width: 640, height: 480, byte_size: 2048 }, target);
+    renderItemMeta({ type: "image", payload: { data_url: "data:image/png;base64,", width: 640, height: 480, byte_size: 2048 } }, target);
     expect(target.textContent).toBe("640×480px • 2 KB");
-    renderItemMeta({ type: "file", paths: ["a", "b"], count: 2 }, target);
+    renderItemMeta({ type: "file", payload: { paths: ["a", "b"], preview: "a", count: 2 } }, target);
     expect(target.textContent).toBe("2 files");
   });
 

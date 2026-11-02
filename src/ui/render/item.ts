@@ -1,6 +1,8 @@
+import type { ClipboardPayload } from "../../types";
+import type { AppFilter, DisplayItem } from "../../state/store";
 import { formatTime, formatTTL } from "../../utils/format";
 
-export function createItemCard(item: any, index: number, selectedIndex: number) {
+export function createItemCard(item: Pick<DisplayItem, "id" | "pinned">, index: number, selectedIndex: number) {
   const card = document.createElement("div");
   card.className = `history-item ${index === selectedIndex ? "selected" : ""} ${item.pinned ? "pinned" : ""}`;
   card.setAttribute("data-id", item.id);
@@ -8,9 +10,8 @@ export function createItemCard(item: any, index: number, selectedIndex: number) 
   return card;
 }
 
-export function renderItemMeta(item: any, metaEl: HTMLElement) {
-  const type = item.type;
-  const payload = item.payload ?? item;
+export function renderItemMeta(item: ClipboardPayload, metaEl: HTMLElement) {
+  const { type, payload } = item;
   if (type === "text") {
     metaEl.textContent = `${payload.char_count} chars • ${payload.line_count} line${payload.line_count > 1 ? "s" : ""}`;
   } else if (type === "image") {
@@ -21,15 +22,15 @@ export function renderItemMeta(item: any, metaEl: HTMLElement) {
   }
 }
 
-export function renderTime(item: any, timeEl: HTMLElement, currentFilter: string) {
-  if (currentFilter === "deleted") {
+export function renderTime(item: DisplayItem, timeEl: HTMLElement) {
+  if ("deleted_at" in item) {
     timeEl.textContent = formatTTL(item.deleted_at || Date.now() + 60000);
   } else {
     timeEl.textContent = formatTime(item.timestamp);
   }
 }
 
-export function renderPinButton(item: any, pinBtn: HTMLButtonElement, onToggle: () => void) {
+export function renderPinButton(item: { pinned?: boolean }, pinBtn: HTMLButtonElement, onToggle: () => void) {
   pinBtn.className = "item-action-btn btn-pin";
   pinBtn.title = item.pinned ? "Unpin (unlock)" : "Pin (lock)";
   pinBtn.setAttribute("aria-label", item.pinned ? "Unpin" : "Pin");
@@ -41,9 +42,9 @@ export function renderPinButton(item: any, pinBtn: HTMLButtonElement, onToggle: 
 }
 
 export function renderActions(
-  item: any,
+  item: { pinned?: boolean },
   actionsEl: HTMLElement,
-  currentFilter: string,
+  currentFilter: AppFilter,
   onToggle: () => void,
   onDelete: () => void,
   onRestore: () => void,

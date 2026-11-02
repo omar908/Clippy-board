@@ -31,6 +31,7 @@ and alternatives belong to the linked ADR.
 | [ui/settings.ts](../../src/ui/settings.ts) | Recording, configurable fields, validation, saving and binding updates |
 | [ui/controls.ts](../../src/ui/controls.ts) | Header buttons invoke commands; rendering follows shared store flags |
 | [app/history.ts](../../src/app/history.ts) | History operations using injectable typed backend and preview ports |
+| [api/normalize.ts](../../src/api/normalize.ts) | Validate clipboard IPC data and normalize nested/legacy flattened payloads before state or rendering |
 | [main.ts](../../src/main.ts) | Creates one shared registry per webview and connects renderer, selection and UI bindings |
 
 The obsolete `actions.ts` wrappers are removed. Command handlers invoke history
@@ -122,8 +123,13 @@ unavailable even when its key combination matches.
 The Rust settings map retains its existing string keys (`search`, `pause`,
 `pinItem`, `delete`). The catalog translates these into action IDs. New entries
 with a `settingsKey` can use the existing map without a Rust schema change.
-Unknown saved entries are preserved by the UI. Typed IPC declarations describe
-the expected payloads; they do not provide runtime payload validation.
+Unknown saved entries are preserved by the UI. Clipboard fetches, restores and
+live clipboard/preview events accept `unknown` at the IPC boundary and validate
+their item metadata and payloads. Nested and legacy flattened entries normalize
+to the discriminated unions in `src/types.ts`; renderers and filters consume only
+that canonical shape. Invalid fetches leave the last valid state in place, and
+invalid live events are logged and ignored. Settings and other IPC declarations
+remain static types rather than runtime validators.
 
 ## Preview routing and lifecycle
 
@@ -183,9 +189,10 @@ restoreBindings();
 
 ## Validation and acceptance
 
-The branch's latest implementation verification reported **96 passing tests**,
-with no expected-failure markers, plus a passing frontend build and diff checks.
-Manual acceptance is recorded below. See the
+At acceptance, implementation verification reported **96 passing tests**, with
+no expected-failure markers, plus a passing frontend build and diff checks.
+The subsequent type-safety cleanup added clipboard boundary validation and brought
+the suite to **127 passing tests**. Manual acceptance is recorded below. See the
 [regression guide](../testing/shortcut-regressions.md) for test scope and baseline
 migration details. Run `npm test` and `npm run build` after implementation changes.
 

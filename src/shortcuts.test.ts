@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { TestKeyEvent } from "./test/keyboard-harness";
 import { ShortcutManager } from "./shortcuts";
 
 describe("ShortcutManager", () => {
@@ -17,8 +18,8 @@ describe("ShortcutManager", () => {
       preventDefault: true,
       stopPropagation: true,
     });
-    const e = { key: "t", ctrlKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn(), stopImmediatePropagation: vi.fn() } as any;
-    await (manager as any).handle(e, false);
+    const event = new TestKeyEvent("keydown", { key: "t", ctrlKey: true });
+    manager.handle(event as unknown as KeyboardEvent);
     expect(action).toHaveBeenCalled();
   });
 });

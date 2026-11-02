@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ClipboardItem, DeletedItem } from "../types";
+import type { ClipboardItem } from "../types";
+import { normalizeDeletedItems } from "../api/normalize";
 import { Store, type AppFilter } from "./store";
 import { deriveHistoryView } from "./selectors";
 
@@ -32,10 +33,10 @@ describe("deriveHistoryView", () => {
   });
 
   it("searches both nested and flattened deleted entries, newest deletion first", () => {
-    const deletedItems = [
+    const deletedItems = normalizeDeletedItems([
       { ...history[0], deleted_at: 10, original_timestamp: 30 },
       { id: "flat", type: "file", paths: ["C:/hello.txt"], preview: "hello.txt", count: 1, deleted_at: 20, original_timestamp: 20 },
-    ] as DeletedItem[];
+    ]);
     const store = new Store();
     store.set({ currentFilter: "deleted", deletedItems, searchQuery: "HELLO" });
     expect(deriveHistoryView(store.get()).filteredHistory.map(i => i.id)).toEqual(["flat", "text"]);

@@ -1,10 +1,10 @@
-export function renderTextContent(item: any, contentEl: HTMLElement) {
-  const payload = item.payload ?? item;
+import type { TextPayload, ImagePayload, FilePayload } from "../../types";
+
+export function renderTextContent(payload: TextPayload, contentEl: HTMLElement) {
   contentEl.textContent = payload.preview || payload.text || "";
 }
 
-export function renderImageContent(item: any, contentEl: HTMLElement) {
-  const payload = item.payload ?? item;
+export function renderImageContent(payload: ImagePayload, contentEl: HTMLElement) {
   contentEl.innerHTML = "";
   const img = document.createElement("img");
   // Prefer the pre-rendered thumbnail; full data_url is the fallback
@@ -15,8 +15,7 @@ export function renderImageContent(item: any, contentEl: HTMLElement) {
   contentEl.appendChild(img);
 }
 
-export function renderFileContent(item: any, contentEl: HTMLElement) {
-  const payload = item.payload ?? item;
+export function renderFileContent(payload: FilePayload, contentEl: HTMLElement) {
   contentEl.innerHTML = "";
   (payload.paths || []).slice(0, 3).forEach((p: string) => {
     const fileRow = document.createElement("div");

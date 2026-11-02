@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { Store } from "../state/store";
 import type { ClipboardItem } from "../types";
@@ -27,8 +27,21 @@ function setup() {
 }
 
 beforeEach(() => vi.mocked(invoke).mockReset());
+afterEach(() => vi.restoreAllMocks());
 
 describe("history controller with shared state", () => {
+  it("preserves the last valid history when a malformed fetch is rejected at the API boundary", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { store, controller, callbacks } = setup();
+    store.set({ history: [text("existing")] });
+    const previous = store.get();
+    vi.mocked(invoke).mockResolvedValueOnce([{ id: "broken", timestamp: 1, type: "file", paths: [42] }]);
+    await controller.fetchInitialHistory();
+    expect(store.get()).toBe(previous);
+    expect(callbacks.renderList).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith("Failed to load initial history:", expect.any(TypeError));
+  });
+
   it("clears only matching, unpinned items and refreshes the store and counts", async () => {
     const { store, controller, elements } = setup();
     store.set({ history: [text("match"), text("match-locked", true), text("other")], searchQuery: "match" });

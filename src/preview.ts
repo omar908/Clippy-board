@@ -8,6 +8,7 @@ import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emitTo } from "@tauri-apps/api/event";
 import type { ClipboardItem } from "./types";
+import { normalizeClipboardItem } from "./api/normalize";
 import { resolvePreviewPlacement } from "./placement";
 import type { Placement } from "./placement";
 
@@ -404,11 +405,14 @@ function initPreviewWindow(): void {
   headerEl = document.getElementById("preview-header")!;
   bodyEl = document.getElementById("preview-body")!;
 
-  void listen("preview-content", (event: { payload: ClipboardItem }) => {
+  void listen<unknown>("preview-content", (event) => {
     if (event.payload) {
-      renderPreviewContent(headerEl, bodyEl, event.payload);
-      renderedId = event.payload.id;
-      open = true;
+      try {
+        const item = normalizeClipboardItem(event.payload);
+        renderPreviewContent(headerEl, bodyEl, item);
+        renderedId = item.id;
+        open = true;
+      } catch (error) { console.error("Invalid preview content:", error); }
     }
   }).catch(() => {});
 
