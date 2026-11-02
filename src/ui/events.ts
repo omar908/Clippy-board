@@ -1,11 +1,13 @@
 export function bindTabEvents(
-  tabHistory: HTMLElement,
-  tabDeleted: HTMLElement,
-  onHistory: () => void,
-  onDeleted: () => void
+  tabs: Iterable<HTMLElement>,
+  onSelect: (filter: string) => void | Promise<void>
 ) {
-  tabHistory.onclick = onHistory;
-  tabDeleted.onclick = onDeleted;
+  for (const tab of tabs) {
+    tab.onclick = () => {
+      const filter = tab.getAttribute("data-filter");
+      if (filter !== null) return onSelect(filter);
+    };
+  }
 }
 
 export function bindSettingsToggle(

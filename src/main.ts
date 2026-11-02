@@ -7,8 +7,8 @@ import { deleteItemAction } from "./actions";
 import * as api from "./api";
 import { getEl } from "./ui/dom";
 import { formatTime, formatTTL } from "./utils/format";
-// import { renderTabs } from "./ui/render/tabs";
-// import { bindTabEvents } from "./ui/events";
+import { renderTabs } from "./ui/render/tabs";
+import { bindTabEvents, bindSettingsToggle } from "./ui/events";
 // import { createItemCard, renderItemMeta, renderTime, renderPinButton, renderActions } from "./ui/render/item";
 // import { renderTextContent, renderImageContent, renderFileContent } from "./ui/render/content";
 // import { renderEmptyState } from "./ui/render/empty";
@@ -1071,22 +1071,20 @@ searchClearBtn.addEventListener("click", () => {
 });
 
 // Filter Tabs
-filterTabs.forEach((tab) => {
-  tab.addEventListener("click", async () => {
-    filterTabs.forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
-    currentFilter = tab.getAttribute("data-filter") as "all" | "pinned" | "text" | "image" | "file" | "deleted";
-    selectedIndex = 0;
-    if (currentFilter === "deleted") {
-      await loadDeleted();
-    }
-    filterAndRender();
-    // Don't auto-focus search bar
-  });
+renderTabs(filterTabs, currentFilter);
+bindTabEvents(filterTabs, async (filter) => {
+  currentFilter = filter as typeof currentFilter;
+  renderTabs(filterTabs, currentFilter);
+  selectedIndex = 0;
+  if (currentFilter === "deleted") {
+    await loadDeleted();
+  }
+  filterAndRender();
+  // Don't auto-focus search bar
 });
 
 // Settings
-settingsBtn.addEventListener("click", async () => {
+bindSettingsToggle(settingsBtn, async () => {
   try {
     const settings: any = await invoke("get_settings");
     if (settingMaxHistory) settingMaxHistory.value = settings.max_history || 100;

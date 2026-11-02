@@ -1,13 +1,8 @@
 export function renderTabs(
-  tabHistory: HTMLElement,
-  tabDeleted: HTMLElement,
+  tabs: Iterable<HTMLElement>,
   currentFilter: string
 ) {
-  if (currentFilter === "deleted") {
-    tabDeleted.classList.add("active");
-    tabHistory.classList.remove("active");
-  } else {
-    tabHistory.classList.add("active");
-    tabDeleted.classList.remove("active");
+  for (const tab of tabs) {
+    tab.classList.toggle("active", tab.getAttribute("data-filter") === currentFilter);
   }
 }
