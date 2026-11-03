@@ -14,6 +14,7 @@ export type HistoryPorts = typeof defaultPorts;
 export function createHistoryController(store: Store, elements: AppElements, callbacks: {
   renderList: () => void;
   onSelected: () => void;
+  onSettingsLoaded?: (settings: Awaited<ReturnType<typeof api.getSettings>>) => void;
 }, ports: HistoryPorts = defaultPorts) {
   const { countAll, countPinned, countText, countImage, countFile, countDeleted, clearBtn } = elements;
   const renderList = callbacks.renderList;
@@ -159,7 +160,11 @@ export function createHistoryController(store: Store, elements: AppElements, cal
   async function fetchInitialHistory() {
     try {
       store.set({ history: await ports.getHistory() });
-      try { store.set({ showPinnedInAll: (await ports.getSettings()).show_pinned_in_all ?? true }); }
+      try {
+        const settings = await ports.getSettings();
+        store.set({ showPinnedInAll: settings.show_pinned_in_all ?? true });
+        callbacks.onSettingsLoaded?.(settings);
+      }
       catch { /* Existing history remains usable if preferences cannot be read. */ }
       await loadDeleted();
       updateCounts();

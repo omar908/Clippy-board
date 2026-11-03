@@ -14,6 +14,7 @@ let startupEnabled = false;
 let startupWrites = 0;
 let maxHistory = 100;
 let deleteTtl = 60;
+let compactMode = params.has("density-compact");
 let showPinnedInAll = !params.has("hide-pinned");
 document.documentElement.dataset.startupWrites = "0";
 window.addEventListener("test-startup-state", event => { startupEnabled = (event as CustomEvent<boolean>).detail; });
@@ -46,7 +47,7 @@ function dispatch(name: string, payload: unknown) {
 let deleted: DeletedItem[] = params.has("deleted") ? ["trash-first", "trash-second"].map(id => ({
   ...sample(id), original_timestamp: 1000, deleted_at: Date.now() + 600_000,
 })) : [];
-let history = [sample("first"), sample("second")];
+let history = params.has("many") ? Array.from({ length: 30 }, (_, i) => sample(`item-${i}`)) : [sample("first"), sample("second")];
 if (params.has("pinned")) history[0].pinned = true;
 if (params.has("only-pinned")) history.forEach(item => { item.pinned = true; });
 export async function listen<T>(name: string, callback: (event: { payload: T }) => void) {
@@ -89,11 +90,12 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     }
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
-    case "get_settings": result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll }; break;
+    case "get_settings": result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode }; break;
     case "save_settings_cmd": {
-      const settings = args?.settings as { shortcuts: Record<string, string>; start_on_login: boolean; show_pinned_in_all: boolean; max_history: number; delete_ttl_seconds: number };
+      const settings = args?.settings as { shortcuts: Record<string, string>; start_on_login: boolean; show_pinned_in_all: boolean; compact_mode: boolean; max_history: number; delete_ttl_seconds: number };
       savedShortcuts = settings.shortcuts;
       showPinnedInAll = settings.show_pinned_in_all;
+      compactMode = settings.compact_mode;
       maxHistory = settings.max_history; deleteTtl = settings.delete_ttl_seconds;
       if (args?.updateStartup) {
         startupEnabled = settings.start_on_login;

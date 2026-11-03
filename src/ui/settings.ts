@@ -16,8 +16,9 @@ export function bindSettingsEvents(elements: AppElements,
   onOpen: () => Promise<void> = async () => {},
 ) {
   const { settingsBtn, settingMaxHistory, settingDeleteTtl, mainContent, settingsPage, settingsBackBtn, settingsSaveBtn, shortcutsReset } = elements;
-  const { settingStartOnLogin, settingShowPinned } = elements;
+  const { settingStartOnLogin, settingShowPinned, settingCompactMode } = elements;
   const statuses = [
+    bindSettingStatus(settingCompactMode, "Compact mode", defaultSettings.compact_mode),
     bindSettingStatus(settingMaxHistory, "Max history items", String(defaultSettings.max_history)),
     bindSettingStatus(settingDeleteTtl, "Delete TTL", String(defaultSettings.delete_ttl_seconds)),
     bindSettingStatus(settingStartOnLogin, "Start with Windows", defaultSettings.start_on_login),
@@ -69,6 +70,7 @@ export function bindSettingsEvents(elements: AppElements,
     settingDeleteTtl.value = String(settings.delete_ttl_seconds ?? 60);
     settingStartOnLogin.checked = settings.start_on_login ?? false;
     settingShowPinned.checked = settings.show_pinned_in_all ?? true;
+    settingCompactMode.checked = settings.compact_mode ?? false;
     startupBaseline = settingStartOnLogin.checked;
     savedShortcuts = settings.shortcuts ?? {};
     for (const { definition, input } of fields) input.value = normalizeShortcut(savedShortcuts[definition.settingsKey!] ?? definition.combo);
@@ -122,6 +124,7 @@ export function bindSettingsEvents(elements: AppElements,
         shortcuts,
         start_on_login: settingStartOnLogin.checked,
         show_pinned_in_all: settingShowPinned.checked,
+        compact_mode: settingCompactMode.checked,
       };
       saving = true;
       settingsSaveBtn.disabled = true;

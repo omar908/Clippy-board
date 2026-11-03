@@ -18,6 +18,8 @@ pub struct AppSettings {
     pub start_on_login: bool,
     #[serde(default = "default_show_pinned")]
     pub show_pinned_in_all: bool,
+    #[serde(default)]
+    pub compact_mode: bool,
 }
 
 fn default_show_pinned() -> bool {
@@ -41,6 +43,7 @@ impl Default for AppSettings {
             shortcuts: std::collections::HashMap::new(),
             start_on_login: false,
             show_pinned_in_all: true,
+            compact_mode: false,
         }
     }
 }
@@ -54,7 +57,19 @@ mod tests {
             serde_json::from_str(r#"{"shortcuts":{"restore":"Ctrl+K"}}"#).unwrap();
         assert!(settings.show_pinned_in_all);
         assert!(!settings.start_on_login);
+        assert!(!settings.compact_mode);
         assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
+    }
+
+    #[test]
+    fn compact_mode_round_trips() {
+        let settings = AppSettings {
+            compact_mode: true,
+            ..AppSettings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let loaded: AppSettings = serde_json::from_str(&json).unwrap();
+        assert!(loaded.compact_mode);
     }
 }
 

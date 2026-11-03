@@ -113,7 +113,7 @@ async function setup() {
     "settingsPage", "mainContent", "searchInput", "pauseBtn", "pinBtn", "clearBtn", "closeBtn",
     "countAll", "countPinned", "countText", "countImage", "countFile", "countDeleted",
     "settingsBtn", "settingMaxHistory", "settingDeleteTtl", "shortcutPinItem", "shortcutDelete",
-    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsSaveBtn", "shortcutsReset", "settingStartOnLogin", "settingShowPinned",
+    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsSaveBtn", "shortcutsReset", "settingStartOnLogin", "settingShowPinned", "settingCompactMode",
   ] as const;
   const ports = Object.fromEntries(keys.map(key => [key, new ElementPort()])) as Record<typeof keys[number], ElementPort>;
   ports.searchInput.id = "search-input";

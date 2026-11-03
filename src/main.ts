@@ -12,6 +12,7 @@ import { renderList } from "./ui/render/list";
 import { createSelectionController } from "./ui/selection";
 import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
+import { applyDensity } from "./ui/density";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindWindowControls } from "./ui/controls";
 import { initPreview, disposePreview, previewDismiss } from "./preview";
@@ -29,6 +30,7 @@ const history = createHistoryController(store, elements, {
     isHoverBlocked: selection.isHoverBlocked,
   }),
   onSelected: () => selection.anchorAfterCopy(),
+  onSettingsLoaded: preferences => applyDensity(preferences.compact_mode),
 });
 const selection = createSelectionController(store, elements, {
   renderList: history.renderList,
@@ -45,6 +47,7 @@ history.updateClearButtonState();
 const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
 const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), undefined, preferences => {
+  applyDensity(preferences.compact_mode);
   store.set({ showPinnedInAll: preferences.show_pinned_in_all });
   updateCounts(); filterAndRender();
 }, async () => {
