@@ -538,6 +538,26 @@ body.preview-window .preview-panel {
   transition: all 0.12s ease;
 }
 
+/* Optional density, scoped to the main column so full previews stay readable.
+   Keep font sizes and action targets; reclaim space from padding and snippets. */
+.density-compact .list-column .clippy-header { padding: 6px 10px 4px; }
+.density-compact .list-column .search-section { padding: 4px 10px 6px; gap: 5px; }
+.density-compact .list-column .search-bar { padding: 5px 10px; }
+.density-compact .list-column .history-container { padding: 2px 10px 6px; }
+.density-compact .list-column .history-list { gap: 4px; }
+.density-compact .list-column .history-item { padding: 6px 8px; gap: 3px; }
+.density-compact .list-column .item-content-text { -webkit-line-clamp: 1; max-height: 19px; }
+.density-compact .list-column .item-content-image { padding: 3px; max-height: 62px; }
+.density-compact .list-column .item-content-image img { max-height: 56px; }
+.density-compact .list-column .item-content-file { gap: 1px; }
+.density-compact .list-column .clippy-footer { padding: 5px 10px; }
+.density-compact .list-column .settings-page { padding: 4px 10px 8px; }
+.density-compact .list-column .settings-header { padding-bottom: 7px; }
+.density-compact .list-column .settings-content { gap: 10px; }
+.density-compact .list-column .settings-section,
+.density-compact .list-column #shortcut-fields { gap: 5px; }
+.density-compact .list-column .settings-row { padding: 6px 8px; }
+
 .history-item:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-strong);

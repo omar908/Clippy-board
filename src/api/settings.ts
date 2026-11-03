@@ -7,11 +7,12 @@ export type AppSettings = {
   shortcuts: Record<string, string>;
   start_on_login: boolean;
   show_pinned_in_all: boolean;
+  compact_mode: boolean;
 };
 
 export const defaultSettings: AppSettings = {
   max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
-  shortcuts: {}, start_on_login: false, show_pinned_in_all: true,
+  shortcuts: {}, start_on_login: false, show_pinned_in_all: true, compact_mode: false,
 };
 
 export async function getSettings() {

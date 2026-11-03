@@ -58,4 +58,33 @@ state, keyboard traversal, pinned counts, and simulated concurrent OS changes.
 success/rollback behavior. These tests do not enable startup on the developer's
 machine or CI runner; Task Manager discovery and sign-in need the manual checks.
 
-Compact density mode is intentionally deferred to a separate layout feature.
+## Compact mode
+
+Default: Off, including existing settings files. Enable Compact mode under
+Application and Save to apply. Back/Escape discards unsaved edits. The per-entry
+Reset returns it to Off after Save; startup and other preferences are unaffected.
+The saved preference is loaded before the initial history render.
+
+Compact mode reduces main-window header, search, card, footer and Settings
+spacing without changing font sizes. Text snippets use one line; image thumbnails
+are smaller. Metadata, timestamps, clipboard badges and actions remain available.
+File cards retain their existing path summary and count. Full previews retain their
+current sizing, complete text/file content, image zoom and adaptive placement.
+Window size and Windows display scaling are not changed.
+
+Manual checks:
+- Enable and Save, then return to history: compare how many cards fit, including
+  multiline text, images, multiple files, pinned entries and Deleted entries.
+- Use arrows, Enter, Delete, Restore and search. Verify selection and the clipboard
+  badge remain clear and card buttons still work.
+- Open full previews with Home at narrow and wide window sizes; verify full content
+  and image zoom remain usable. Resize and try your 225% Windows scaling.
+- Reopen Settings and restart the app to confirm the saved choice. Reset Compact
+  mode and Save to return to the original layout. Close without saving to verify
+  an edited checkbox does not change the active layout.
+
+The density browser suite runs through the existing CI layout-test job. It compares
+visible-card counts for text/images/files at 360×420 at 100% and 200% device scale,
+checks default/Save/discard/Reset behavior, keyboard selection, saved startup state,
+clipboard badges, Settings scrolling and full previews. Rust tests cover legacy
+settings defaults and serialization of the enabled preference.
