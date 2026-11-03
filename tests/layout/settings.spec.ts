@@ -69,11 +69,12 @@ test("startup changes are explicit and unrelated saves respect Task Manager stat
   const startup = page.getByLabel("Start with Windows", { exact: true });
   await expect(startup).not.toBeChecked();
   await startup.check();
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await expect(page.locator("html")).toHaveAttribute("data-startup-writes", "1");
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-startup-state", { detail: false })));
   await page.locator("#setting-max-history").fill("150");
-  await page.locator("#settings-save-btn").click();
+  await page.locator("#setting-max-history").blur();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await expect(startup).not.toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-startup-writes", "1");
   await page.keyboard.press("Escape");
@@ -87,7 +88,7 @@ test("hiding pinned entries changes only All and its count", async ({ page }) =>
   await expect(page.locator(".history-item")).toHaveCount(2);
   await page.keyboard.press("Control+,");
   await page.getByLabel("Show pinned items in All", { exact: true }).uncheck();
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await page.keyboard.press("Escape");
   await expect(page.locator(".history-item")).toHaveCount(1);
   await expect(page.locator("#count-all")).toHaveText("1");
@@ -100,7 +101,7 @@ test("hiding pinned entries changes only All and its count", async ({ page }) =>
   await page.locator('[data-filter="all"]').click();
   await page.keyboard.press("Control+,");
   await page.getByRole("button", { name: "Reset Show pinned items in All to default", exact: true }).click();
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await page.keyboard.press("Escape");
   await expect(page.locator(".history-item")).toHaveCount(2);
   await expect(page.locator("#count-all")).toHaveText("2");
