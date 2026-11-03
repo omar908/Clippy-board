@@ -36,6 +36,23 @@
           </div>
           <div class="settings-content">
             <div class="settings-section">
+              <div class="settings-section-title">Application</div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <label for="setting-start-on-login" class="settings-row-label">Start with Windows</label>
+                  <div class="settings-row-desc">Start in the tray when you sign in. Also managed in Task Manager → Startup apps.</div>
+                </div>
+                <input type="checkbox" id="setting-start-on-login" class="settings-checkbox" />
+              </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <label for="setting-show-pinned" class="settings-row-label">Show pinned items in All</label>
+                  <div class="settings-row-desc">When off, All hides pinned items. Pinned and type tabs still include them.</div>
+                </div>
+                <input type="checkbox" id="setting-show-pinned" class="settings-checkbox" checked />
+              </div>
+            </div>
+            <div class="settings-section">
               <div class="settings-section-title">History</div>
               <div class="settings-row">
                 <div class="settings-row-info">
@@ -125,7 +142,7 @@
                 <input type="text" id="shortcut-pause" class="settings-input" placeholder="Not set" readonly />
               </div>
               <div id="shortcut-fields"></div>
-              <button id="shortcuts-reset" class="settings-btn">Reset to defaults</button>
+              <button id="shortcuts-reset" class="settings-btn">Reset all shortcuts</button>
             </div>
             <div class="settings-section">
               <div class="settings-section-title">About</div>

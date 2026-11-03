@@ -25,6 +25,7 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
       hasSearch: Boolean(state.searchQuery),
       searchQuery: state.searchQuery,
       currentFilter: state.currentFilter,
+      pinnedHidden: !state.showPinnedInAll && state.history.some(item => item.pinned),
       emptyTitleDefault, emptyDescDefault,
     });
     return;

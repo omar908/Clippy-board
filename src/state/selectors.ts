@@ -20,6 +20,7 @@ export function deriveHistoryView(state: Readonly<AppState>) {
     }).sort((a, b) => (b.deleted_at || 0) - (a.deleted_at || 0));
   } else {
     filteredHistory = state.history.filter(item => {
+      if (currentFilter === "all" && !state.showPinnedInAll && item.pinned) return false;
       if (currentFilter === "pinned" && !item.pinned) return false;
       if (currentFilter !== "all" && currentFilter !== "pinned" && item.type !== currentFilter) return false;
       if (!query) return true;

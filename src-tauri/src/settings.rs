@@ -14,6 +14,14 @@ pub struct AppSettings {
     pub delete_ttl_seconds: u64,
     #[serde(default)]
     pub shortcuts: std::collections::HashMap<String, String>,
+    #[serde(default)]
+    pub start_on_login: bool,
+    #[serde(default = "default_show_pinned")]
+    pub show_pinned_in_all: bool,
+}
+
+fn default_show_pinned() -> bool {
+    true
 }
 
 fn default_max_history() -> usize {
@@ -31,12 +39,30 @@ impl Default for AppSettings {
             delete_immediately: false,
             delete_ttl_seconds: 60,
             shortcuts: std::collections::HashMap::new(),
+            start_on_login: false,
+            show_pinned_in_all: true,
         }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn old_settings_keep_existing_pinned_visibility_and_startup_is_opt_in() {
+        let settings: AppSettings =
+            serde_json::from_str(r#"{"shortcuts":{"restore":"Ctrl+K"}}"#).unwrap();
+        assert!(settings.show_pinned_in_all);
+        assert!(!settings.start_on_login);
+        assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
+    }
+}
+
 fn get_settings_path(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|dir| dir.join("settings.json"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|dir| dir.join("settings.json"))
 }
 
 pub fn load_settings(app: &AppHandle) -> AppSettings {

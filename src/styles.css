@@ -873,6 +873,41 @@ body.preview-window .preview-panel {
   flex: 1;
 }
 
+.settings-row-customizable {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px auto;
+  gap: 6px 8px;
+}
+
+.settings-field-default {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.settings-customized .settings-field-default {
+  color: var(--accent-text);
+}
+
+.settings-field-reset {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--overlay-1);
+  color: var(--text-primary);
+  padding: 5px 7px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.settings-field-reset:disabled { opacity: 0.4; cursor: default; }
+.settings-checkbox { width: 18px; height: 18px; justify-self: end; accent-color: var(--accent-color); }
+.settings-row-customizable > .settings-row-label { min-width: 0; }
+.settings-input:focus-visible, .settings-checkbox:focus-visible, .settings-field-reset:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 .settings-row-label {
   font-size: 12px;
   color: var(--text-primary);

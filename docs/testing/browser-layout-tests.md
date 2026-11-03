@@ -46,6 +46,10 @@ Current-clipboard coverage checks a single readable badge distinct from selectio
 no-match startup, status updates while paused, app copying, and narrow cards for
 text, long text, images, and files. Clipboard notifications are mocked; native
 matching and frontend snapshot/event races have separate unit coverage.
+Settings preference cases additionally cover keyboard focus/Tab/Escape,
+per-entry resets/default indicators, narrow layouts, All-only pinned filtering,
+and simulated Task Manager changes. See
+[Settings and startup preferences](settings-preferences.md) for native checks.
 
 Tests fail on browser JavaScript errors and console errors. They use bounding-box
 invariants rather than pixel-perfect screenshot baselines, so ordinary cosmetic

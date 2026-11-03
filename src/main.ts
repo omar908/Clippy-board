@@ -14,7 +14,8 @@ import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindWindowControls } from "./ui/controls";
-import { initPreview, disposePreview } from "./preview";
+import { initPreview, disposePreview, previewDismiss } from "./preview";
+import { showWindow } from "./api/window";
 
 const elements = getAppElements();
 const history = createHistoryController(store, elements, {
@@ -43,7 +44,15 @@ const { releaseKeyboard } = selection;
 history.updateClearButtonState();
 const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
-bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), () => { void commands.execute("settings.close"); });
+const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), undefined, preferences => {
+  store.set({ showPinnedInAll: preferences.show_pinned_in_all });
+  updateCounts(); filterAndRender();
+}, async () => {
+  previewDismiss();
+  await showWindow();
+});
+commands.register("settings.close", { execute: settings.close });
+commands.register("settings.toggle", { exclusive: true, execute: settings.toggle });
 bindWindowControls(store, elements, selection, commands);
 window.addEventListener("beforeunload", () => disposePreview());
 

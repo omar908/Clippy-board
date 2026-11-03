@@ -21,6 +21,7 @@ export type AppCommandArgs = {
   "window.pin": [];
   "window.menu": [];
   "settings.close": [];
+  "settings.toggle": [];
 };
 export type AppCommands = CommandRegistry<AppCommandArgs>;
 
