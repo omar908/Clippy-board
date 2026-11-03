@@ -96,16 +96,18 @@ Clippy starts **in the system tray** (no window visible on launch).
 
 Manual regression checklist: **[docs/testing/manual-smoke-test.md](docs/testing/manual-smoke-test.md)**.
 
-`npm test` runs the Vitest suite for the pure preview-placement rules (`src/placement.test.ts`).
+`npm test` runs the frontend regression suite, including commands, shortcuts,
+settings, clipboard state and preview placement. `npm run test:layout` runs the
+Chromium layout and interaction tests.
 
-`cargo test --manifest-path src-tauri/Cargo.toml` runs the storage unit tests
-(dedup/newest-wins, trimming, ordering, corrupt-row handling).
+`cargo test --manifest-path src-tauri/Cargo.toml --locked --all-targets` runs the
+native unit and integration tests.
 
 Automated UI smoke test (WebView2 CDP). Build a debug binary with embedded
 assets, then run it through the helper:
 
 ```powershell
-npm run tauri build -- --debug --no-bundle
+npm run build:debug
 powershell -ExecutionPolicy Bypass -File scripts\run-smoke.ps1 -Exe src-tauri\target\debug\clippy.exe
 ```
 
@@ -114,6 +116,11 @@ window, runs `scripts/smoke.mjs` (title/header/width token, history render,
 hover -> preview), and stops the app. Add `-Seed` only on a disposable
 machine: it replaces the history with four synthetic samples, and the smoke
 then hovers the known `smoke-text-long` card.
+
+The debug build script typechecks/builds the frontend, embeds its assets, skips
+installers, and generates Cargo timing reports. See
+[build and CI timings](docs/testing/build-performance.md) for the build profiles,
+cache behavior and measurement instructions.
 
 CI (`.github/workflows/ci.yml`) runs all of the above on Windows for pushes to
 `main` and pull requests targeting `main`. A version bump merged into `main`

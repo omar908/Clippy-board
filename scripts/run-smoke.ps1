@@ -28,7 +28,7 @@ if (-not [System.IO.Path]::IsPathRooted($Exe)) {
 }
 $Exe = [System.IO.Path]::GetFullPath($Exe)
 if (-not (Test-Path -LiteralPath $Exe)) {
-    throw "Executable not found: $Exe (build it first: npm run tauri build -- --debug --no-bundle)"
+    throw "Executable not found: $Exe (build it first: npm run build:debug)"
 }
 
 $logDir = Join-Path $repoRoot "src-tauri\target\smoke-logs"

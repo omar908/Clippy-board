@@ -630,7 +630,6 @@ pub fn run() {
     let state = ClipboardState::new();
     let history_arc = Arc::clone(&state.history);
     let db_arc = Arc::clone(&state.db);
-    let deleted_arc_setup = Arc::clone(&state.deleted);
 
     let shortcut: Shortcut = "Ctrl+Shift+Space".parse().expect("failed to parse shortcut");
     let shortcut_clone = shortcut.clone();

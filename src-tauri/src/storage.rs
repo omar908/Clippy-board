@@ -66,7 +66,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
     let mut items = Vec::new();
     let mut stmt = match conn.prepare("SELECT id, timestamp, payload, pinned FROM history ORDER BY timestamp DESC") {
         Ok(s) => s,
-        Err(e) => {
+        Err(_) => {
             // Try without pinned column for old DBs
             let mut stmt2 = match conn.prepare("SELECT id, timestamp, payload FROM history ORDER BY timestamp DESC") {
                 Ok(s) => s,
