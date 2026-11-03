@@ -8,6 +8,7 @@ export function renderEmptyState(
     currentFilter: string;
     emptyTitleDefault: string;
     emptyDescDefault: string;
+    pinnedHidden?: boolean;
   }
 ) {
   emptyState.style.display = "flex";
@@ -19,6 +20,11 @@ export function renderEmptyState(
   if (options.currentFilter === "deleted") {
     emptyTitle.textContent = "No deleted items";
     emptyDesc.textContent = "Items you delete will appear here temporarily until they expire.";
+    return;
+  }
+  if (options.pinnedHidden && options.currentFilter === "all") {
+    emptyTitle.textContent = "No unpinned items";
+    emptyDesc.textContent = "Your pinned entries are available in the Pinned tab.";
     return;
   }
   emptyTitle.textContent = options.emptyTitleDefault;

@@ -4,6 +4,7 @@ pub mod storage;
 mod window_menu;
 mod item_selection;
 mod current_clipboard;
+mod startup;
 
 #[tauri::command]
 fn get_current_clipboard_item_id(state: State<ClipboardState>) -> Option<String> {
@@ -260,14 +261,30 @@ fn get_listening_paused() -> bool {
 }
 
 #[tauri::command]
-fn get_settings(app: AppHandle) -> settings::AppSettings {
-    settings::load_settings(&app)
+fn get_settings(app: AppHandle) -> Result<settings::AppSettings, String> {
+    let mut settings = settings::load_settings(&app);
+    settings.start_on_login = startup::enabled(&app)?;
+    Ok(settings)
 }
 
 #[tauri::command]
-fn save_settings_cmd(app: AppHandle, settings: settings::AppSettings) -> Result<(), String> {
+fn save_settings_cmd(
+    app: AppHandle,
+    mut settings: settings::AppSettings,
+    update_startup: Option<bool>,
+) -> Result<settings::AppSettings, String> {
+    let before = startup::enabled(&app)?;
+    if !update_startup.unwrap_or(false) {
+        settings.start_on_login = before;
+    }
+    startup::save(
+        before,
+        settings.start_on_login,
+        |value| startup::set_enabled(&app, value),
+        || settings::save_settings(&app, &settings),
+    )?;
     storage::set_max_history(settings.max_history);
-    settings::save_settings(&app, &settings)
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -623,6 +640,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main_window(app);
         }))
+        .plugin(tauri_plugin_autostart::Builder::new().app_name(APP_NAME).build())
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

@@ -25,6 +25,8 @@ export function getAppElements() {
   const mainContent = getEl("main-content") as HTMLDivElement;
   const settingMaxHistory = getEl("setting-max-history") as HTMLInputElement;
   const settingDeleteTtl = getEl("setting-delete-ttl") as HTMLInputElement;
+  const settingStartOnLogin = getEl("setting-start-on-login") as HTMLInputElement;
+  const settingShowPinned = getEl("setting-show-pinned") as HTMLInputElement;
   const shortcutPinItem = getEl("shortcut-pin-item") as HTMLInputElement;
   const shortcutDelete = getEl("shortcut-delete") as HTMLInputElement;
   const shortcutPause = getEl("shortcut-pause") as HTMLInputElement;
@@ -36,7 +38,7 @@ export function getAppElements() {
   const countImage = getEl("count-image") as HTMLSpanElement;
   const countFile = getEl("count-file") as HTMLSpanElement;
 
-  return { countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsSaveBtn, countAll, countText, countImage, countFile };
+  return { settingStartOnLogin, settingShowPinned, countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsSaveBtn, countAll, countText, countImage, countFile };
 }
 
 export type AppElements = ReturnType<typeof getAppElements>;

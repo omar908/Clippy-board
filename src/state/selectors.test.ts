@@ -11,6 +11,16 @@ const history: ClipboardItem[] = [
 ];
 
 describe("deriveHistoryView", () => {
+  it("can hide pinned entries only in All without changing other tabs or stored history", () => {
+    const store = new Store();
+    store.set({ history, showPinnedInAll: false });
+    expect(deriveHistoryView(store.get()).filteredHistory.map(item => item.id)).toEqual(["text", "file"]);
+    store.set({ currentFilter: "pinned" });
+    expect(deriveHistoryView(store.get()).filteredHistory.map(item => item.id)).toEqual(["image"]);
+    store.set({ currentFilter: "image" });
+    expect(deriveHistoryView(store.get()).filteredHistory.map(item => item.id)).toEqual(["image"]);
+    expect(store.get().history).toBe(history);
+  });
   it.each<[AppFilter, string[]]>([
     ["all", ["image", "text", "file"]], ["pinned", ["image"]],
     ["text", ["text"]], ["image", ["image"]], ["file", ["file"]], ["deleted", []],

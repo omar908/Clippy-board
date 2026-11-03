@@ -21,7 +21,7 @@ export function createHistoryController(store: Store, elements: AppElements, cal
     updateCountsUI({
       all: countAll, pinned: countPinned, text: countText,
       image: countImage, file: countFile, deleted: countDeleted,
-    }, store.get().history, store.get().deletedItems.length);
+    }, store.get().history, store.get().deletedItems.length, store.get().showPinnedInAll);
   }
   function filterAndRender() {
     store.set(deriveHistoryView(store.get()));
@@ -159,6 +159,8 @@ export function createHistoryController(store: Store, elements: AppElements, cal
   async function fetchInitialHistory() {
     try {
       store.set({ history: await ports.getHistory() });
+      try { store.set({ showPinnedInAll: (await ports.getSettings()).show_pinned_in_all ?? true }); }
+      catch { /* Existing history remains usable if preferences cannot be read. */ }
       await loadDeleted();
       updateCounts();
       filterAndRender();

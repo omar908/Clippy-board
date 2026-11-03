@@ -21,7 +21,7 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
   window.addEventListener("keydown", deferNativeMenuKey, true);
   const manager = new ShortcutManager({
     isSettingsOpen: settingsOpen,
-    isSettingsInputActive: () => Boolean(active()?.classList.contains("settings-input")),
+    isSettingsInputActive: () => Boolean(active()?.classList.contains("shortcut-recorder")),
     isSearchInputActive: () => active() === elements.searchInput,
     getActiveElement: active,
   });
@@ -31,11 +31,14 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
   for (const definition of shortcutDefinitions) {
     manager.register({
       id: definition.id, combo: definition.combo,
-      allowInSearchInput: definition.scope === "search" || definition.scope === "tabs" || definition.scope === "escape" || definition.scope === "window",
+      allowInSearchInput: definition.scope !== "list",
+      allowWhenTyping: definition.scope === "settings" || definition.scope === "escape" || definition.scope === "window",
+      allowInSettingsInput: definition.scope === "settings" || definition.scope === "escape",
       when: () => {
         // Enter activates the compact preview's Back button natively.
         if (definition.id === "item.copy" && active()?.id === "preview-back") return false;
-        return !settingsOpen() || definition.scope === "escape" || definition.scope === "window";
+        if (definition.scope === "settings" && active()?.classList.contains("shortcut-recorder")) return false;
+        return !settingsOpen() || definition.scope === "escape" || definition.scope === "window" || definition.scope === "settings";
       },
       stopImmediatePropagation: true,
       action: () => {
@@ -71,7 +74,7 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
   }
   function runForwarded(definition: AppShortcut | undefined) {
     if (isPreview || disposed || !definition) return;
-    if (settingsOpen()) {
+    if (settingsOpen() && definition.scope !== "settings") {
       if (definition.scope === "escape") void commands.execute("settings.close");
       return;
     }

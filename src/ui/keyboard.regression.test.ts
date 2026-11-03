@@ -49,6 +49,9 @@ class ElementPort {
   innerHTML = "";
   title = "";
   disabled = false;
+  checked = false;
+  readOnly = false;
+  parentElement: ElementPort | null = null;
   style = { display: "none", flexDirection: "", flex: "", minHeight: "" };
   private classes = new Set<string>();
   classList = {
@@ -70,8 +73,9 @@ class ElementPort {
   focus() { documentPort.activeElement = this; }
   blur() { documentPort.activeElement = documentPort.body; }
   setAttribute(_name: string, _value: string) {}
-  append(..._children: ElementPort[]) {}
-  appendChild(child: ElementPort) { return child; }
+  closest(_selector: string) { return this.parentElement; }
+  append(...children: ElementPort[]) { children.forEach(child => { child.parentElement = this; }); }
+  appendChild(child: ElementPort) { child.parentElement = this; return child; }
 }
 
 let documentPort: { activeElement: ElementPort; body: ElementPort };
@@ -109,7 +113,7 @@ async function setup() {
     "settingsPage", "mainContent", "searchInput", "pauseBtn", "pinBtn", "clearBtn", "closeBtn",
     "countAll", "countPinned", "countText", "countImage", "countFile", "countDeleted",
     "settingsBtn", "settingMaxHistory", "settingDeleteTtl", "shortcutPinItem", "shortcutDelete",
-    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsSaveBtn", "shortcutsReset",
+    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsSaveBtn", "shortcutsReset", "settingStartOnLogin", "settingShowPinned",
   ] as const;
   const ports = Object.fromEntries(keys.map(key => [key, new ElementPort()])) as Record<typeof keys[number], ElementPort>;
   ports.searchInput.id = "search-input";
@@ -124,6 +128,7 @@ async function setup() {
     if (command === "get_settings") return { shortcuts: { ...settings.shortcuts } };
     if (command === "get_history") return backendHistory.map(entry => ({ ...entry }));
     if (command === "get_deleted") return [];
+    if (command === "save_settings_cmd") return (args as { settings: unknown }).settings;
     if (command === "toggle_pin") {
       const { id, pinned } = args as { id: string; pinned: boolean };
       backendHistory = backendHistory.map(entry => entry.id === id ? { ...entry, pinned } : entry);
@@ -142,7 +147,9 @@ async function setup() {
   const commands = createAppCommands(store, elements, history, selection);
   const keyboard = bindKeyboardEvents(elements, commands);
   bindWindowControls(store, elements, selection, commands);
-  bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts));
+  const settingsController = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts));
+  commands.register("settings.close", { execute: settingsController.close });
+  commands.register("settings.toggle", { execute: settingsController.toggle });
   await keyboard.ready;
   await settleKeyboard();
   vi.mocked(invoke).mockClear();
@@ -152,6 +159,45 @@ async function setup() {
 const callsTo = (command: string) => vi.mocked(invoke).mock.calls.filter(call => call[0] === command);
 
 describe("keyboard integration regression contracts", () => {
+  it("opens and closes Settings by shortcut, returns focus, and leaves Tab/Escape available in recorders", async () => {
+    const { dispatch, ports } = await setup();
+    ports.searchInput.focus();
+    dispatch(",", { ctrlKey: true });
+    await settleKeyboard();
+    expect(ports.settingsPage.style.display).toBe("flex");
+    expect(documentPort.activeElement).toBe(ports.settingsBackBtn);
+    dispatch(",", { ctrlKey: true });
+    await settleKeyboard();
+    expect(ports.settingsPage.style.display).toBe("none");
+    expect(documentPort.activeElement).toBe(ports.searchInput);
+    dispatch(",", { ctrlKey: true });
+    await settleKeyboard();
+    ports.shortcutPause.focus();
+    const tab = new TestKeyEvent("keydown", { key: "Tab" });
+    await ports.shortcutPause.dispatch("keydown", tab);
+    expect(tab.defaultPrevented).toBe(false);
+    dispatch("Escape");
+    await settleKeyboard();
+    expect(ports.settingsPage.style.display).toBe("none");
+    expect(documentPort.activeElement).toBe(ports.searchInput);
+  });
+
+  it("shows the default and customization status and resets just one shortcut", async () => {
+    const { ports, generated } = await setup();
+    await ports.settingsBtn.dispatch("click"); await settleKeyboard();
+    const restore = generated.find(element => element.id === "shortcut-item-restore")!;
+    const menu = generated.find(element => element.id === "shortcut-window-menu")!;
+    const status = generated.find(element => element.id === "default-shortcut-item-restore")!;
+    menu.value = "Ctrl+M";
+    await restore.dispatch("keydown", new TestKeyEvent("keydown", { key: "k", ctrlKey: true }));
+    expect(status.textContent).toBe("Default: Ctrl+R · Customized");
+    const reset = generated.find(element => element.tagName === "BUTTON" && element.parentElement === restore.parentElement)!;
+    await reset.dispatch("click");
+    expect(restore.value).toBe("Ctrl+R");
+    expect(menu.value).toBe("Ctrl+M");
+    expect(status.textContent).toBe("Default: Ctrl+R");
+    expect(reset.disabled).toBe(true);
+  });
   it("restores with Ctrl+R only in Deleted, and supports rebinding and disabling", async () => {
     const { dispatch, store, history, keyboard, ports } = await setup();
     dispatch("r", { ctrlKey: true });
@@ -297,9 +343,9 @@ describe("keyboard integration regression contracts", () => {
     expect(emitTo).toHaveBeenCalledWith("preview", "shortcuts-updated", {
       shortcuts: expect.objectContaining({ search: "Ctrl+K" }),
     });
-    ports.settingsPage.style.display = "none";
+    await ports.settingsBackBtn.dispatch("click");
     dispatch("f", { ctrlKey: true });
-    expect(documentPort.activeElement).toBe(documentPort.body);
+    expect(documentPort.activeElement).toBe(ports.settingsBtn);
     dispatch("k", { ctrlKey: true });
     expect(documentPort.activeElement).toBe(ports.searchInput);
   });
@@ -321,9 +367,9 @@ describe("keyboard integration regression contracts", () => {
     await settleKeyboard();
     ports.shortcutSearch.value = "";
     await ports.settingsSaveBtn.dispatch("click");
-    ports.settingsPage.style.display = "none";
+    await ports.settingsBackBtn.dispatch("click");
     expect(dispatch("f", { ctrlKey: true }).defaultPrevented).toBe(false);
-    expect(documentPort.activeElement).toBe(documentPort.body);
+    expect(documentPort.activeElement).toBe(ports.settingsBtn);
   });
 
   it("does not overwrite a saved binding with an older in-flight settings load", async () => {

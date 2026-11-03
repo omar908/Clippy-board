@@ -10,6 +10,13 @@ document.documentElement.dataset.copyCount = "0";
 document.documentElement.dataset.menuCount = "0";
 let menuCount = 0;
 let savedShortcuts: Record<string, string> = {};
+let startupEnabled = false;
+let startupWrites = 0;
+let maxHistory = 100;
+let deleteTtl = 60;
+let showPinnedInAll = !params.has("hide-pinned");
+document.documentElement.dataset.startupWrites = "0";
+window.addEventListener("test-startup-state", event => { startupEnabled = (event as CustomEvent<boolean>).detail; });
 let currentClipboardId: string | null = params.get("clipboard");
 window.addEventListener("test-native-menu-key", () => dispatch("native-menu-key", null));
 window.addEventListener("test-current-clipboard", event => {
@@ -40,6 +47,8 @@ let deleted: DeletedItem[] = params.has("deleted") ? ["trash-first", "trash-seco
   ...sample(id), original_timestamp: 1000, deleted_at: Date.now() + 600_000,
 })) : [];
 let history = [sample("first"), sample("second")];
+if (params.has("pinned")) history[0].pinned = true;
+if (params.has("only-pinned")) history.forEach(item => { item.pinned = true; });
 export async function listen<T>(name: string, callback: (event: { payload: T }) => void) {
   const handler = (payload: unknown) => callback({ payload: payload as T });
   const set = subscriptions.get(name) ?? new Set<(payload: unknown) => void>();
@@ -80,8 +89,19 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     }
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
-    case "get_settings": result = { max_history: 100, delete_immediately: false, delete_ttl_seconds: 60, shortcuts: savedShortcuts }; break;
-    case "save_settings_cmd": savedShortcuts = (args?.settings as { shortcuts: Record<string, string> }).shortcuts; break;
+    case "get_settings": result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll }; break;
+    case "save_settings_cmd": {
+      const settings = args?.settings as { shortcuts: Record<string, string>; start_on_login: boolean; show_pinned_in_all: boolean; max_history: number; delete_ttl_seconds: number };
+      savedShortcuts = settings.shortcuts;
+      showPinnedInAll = settings.show_pinned_in_all;
+      maxHistory = settings.max_history; deleteTtl = settings.delete_ttl_seconds;
+      if (args?.updateStartup) {
+        startupEnabled = settings.start_on_login;
+        document.documentElement.dataset.startupWrites = String(++startupWrites);
+      }
+      result = { ...settings, start_on_login: startupEnabled };
+      break;
+    }
     case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
     case "is_pointer_held": result = false; break;
     case "select_item":
@@ -101,7 +121,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "set_listening_paused": result = args?.paused; break;
     case "set_interacting": result = args?.interacting; break;
     case "preview_hide": case "preview_show": case "preview_update": case "preview_position": case "preview_set_size":
-    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": break;
+    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": case "show_window": break;
     default: throw new Error(`Unexpected native command in browser layout test: ${command}`);
   }
   return result as T;

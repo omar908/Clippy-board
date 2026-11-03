@@ -12,6 +12,9 @@ to be mode-specific.
 
 ## 0. Setup
 
+Changes to Settings/startup also require the checks in
+[Settings and startup preferences](settings-preferences.md).
+
 - [ ] Build the release binary (`npm run build` + `cargo build --release`, or the
       Tauri bundler). A plain `cargo build` can embed a stale frontend — see the
       `generate_context!` note in the project history.

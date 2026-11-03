@@ -5,12 +5,19 @@ export type AppSettings = {
   delete_immediately: boolean;
   delete_ttl_seconds: number;
   shortcuts: Record<string, string>;
+  start_on_login: boolean;
+  show_pinned_in_all: boolean;
+};
+
+export const defaultSettings: AppSettings = {
+  max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
+  shortcuts: {}, start_on_login: false, show_pinned_in_all: true,
 };
 
 export async function getSettings() {
-  return invoke<AppSettings>("get_settings");
+  return { ...defaultSettings, ...await invoke<AppSettings>("get_settings") };
 }
 
-export async function saveSettings(settings: AppSettings) {
-  return invoke<void>("save_settings_cmd", { settings });
+export async function saveSettings(settings: AppSettings, updateStartup = false) {
+  return invoke<AppSettings>("save_settings_cmd", { settings, updateStartup });
 }
