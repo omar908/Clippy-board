@@ -50,6 +50,12 @@ Settings preference cases additionally cover keyboard focus/Tab/Escape,
 per-entry resets/default indicators, narrow layouts, All-only pinned filtering,
 and simulated Task Manager changes. See
 [Settings and startup preferences](settings-preferences.md) for native checks.
+Autosave cases cover per-entry wrapping feedback and Retry at 360×420, a fixed
+summary, number blur/Enter validation, failed loads, conflicting shortcuts and
+atomic resets, delayed/serialized writes, rapid reversals, draft preservation,
+and Review/Discard protection on Settings/window close. Failures and delays are
+injected only at the mocked native boundary; no real settings file or startup
+registration is changed.
 
 Tests fail on browser JavaScript errors and console errors. They use bounding-box
 invariants rather than pixel-perfect screenshot baselines, so ordinary cosmetic

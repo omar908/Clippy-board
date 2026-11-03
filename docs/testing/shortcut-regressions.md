@@ -16,7 +16,7 @@ The first two manager tests therefore register cached strings with asynchronous
 actions instead of asynchronous binding providers. They still assert one action
 per dispatch and consumption before dispatch returns. Settings reload tests
 explicitly refresh the cache after simulating a backend update. Separate tests
-exercise the actual settings Save handler and its immediate cache update.
+exercise the actual settings autosave handler and its immediate cache update.
 
 Additional suites cover command availability, binding precedence/conflicts,
 explicit disabling, nested temporary overrides, registration replacement,

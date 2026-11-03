@@ -54,7 +54,7 @@
               <div class="settings-row">
                 <div class="settings-row-info">
                   <label for="setting-compact-mode" class="settings-row-label">Compact mode</label>
-                  <div class="settings-row-desc">Fit more history with tighter spacing, one-line text snippets and smaller thumbnails. Full previews stay the same size. Save to apply.</div>
+                  <div class="settings-row-desc">Fit more history with tighter spacing, one-line text snippets and smaller thumbnails. Full previews stay the same size.</div>
                 </div>
                 <input type="checkbox" id="setting-compact-mode" class="settings-checkbox" />
               </div>
@@ -158,7 +158,19 @@
                 <div class="settings-about-sub">Clipboard Manager</div>
               </div>
             </div>
-            <button id="settings-save-btn" class="settings-save-btn">Save Settings</button>
+          </div>
+          <div class="settings-save-status">
+            <div id="settings-status" role="status" aria-live="polite">Loading settings…</div>
+            <button type="button" id="settings-attention" class="settings-feedback-button" hidden>Review unsaved changes</button>
+            <button type="button" id="settings-retry" class="settings-feedback-button" hidden>Retry loading settings</button>
+            <div id="settings-leave" hidden>
+              <p>Some changes haven’t been saved. Review them or discard only the unsaved changes.</p>
+              <div class="settings-leave-actions">
+                <button type="button" id="settings-review" class="settings-btn">Review changes</button>
+                <button type="button" id="settings-discard" class="settings-btn">Discard unsaved changes</button>
+              </div>
+            </div>
+            <div class="settings-autosave-hint">Changes save automatically. Numbers save when you leave the field or press Enter.</div>
           </div>
         </div>
 

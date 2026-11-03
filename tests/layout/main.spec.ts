@@ -47,7 +47,7 @@ test("Restore defaults to Ctrl+R and can be overridden in Settings", async ({ pa
   await expect(field).toHaveValue("Ctrl+R");
   await field.focus();
   await page.keyboard.press("Control+k");
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await page.locator("#settings-back-btn").click();
   await page.keyboard.press("Control+k");
   await expect(page.locator(".history-item")).toHaveCount(0);
@@ -78,7 +78,7 @@ test("native Alt+Space routing honors menu recording, overrides, and disabling",
   await expect(field).toHaveValue("Alt+Space");
   await expect(page.locator("html")).toHaveAttribute("data-menu-count", "1");
   await page.keyboard.press("Control+m");
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await page.locator("#settings-back-btn").click();
   await forward();
   await expect(page.locator("html")).toHaveAttribute("data-menu-count", "1");
@@ -86,7 +86,7 @@ test("native Alt+Space routing honors menu recording, overrides, and disabling",
   await expect(page.locator("html")).toHaveAttribute("data-menu-count", "2");
   await page.locator("#settings-btn").click();
   await field.focus(); await page.keyboard.press("Backspace");
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await page.locator("#settings-back-btn").click();
   await forward(); await page.keyboard.press("Control+m");
   await expect(page.locator("html")).toHaveAttribute("data-menu-count", "2");

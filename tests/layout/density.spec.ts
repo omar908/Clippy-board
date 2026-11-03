@@ -1,6 +1,6 @@
 import { test, expect, expectUnclipped } from "./helpers";
 
-test("compact mode applies only on Save, survives reopening Settings and resets to default", async ({ page }) => {
+test("compact mode autosaves, survives reopening Settings and resets to default", async ({ page }) => {
   await page.goto("/?mode=main&many=1&content=long");
   await page.mouse.move(0, 0);
   await expect(page.locator(".history-item")).toHaveCount(30);
@@ -10,16 +10,11 @@ test("compact mode applies only on Save, survives reopening Settings and resets 
   const toggle = page.getByLabel("Compact mode", { exact: true });
   await expect(toggle).not.toBeChecked();
   await toggle.check();
-  await expect(page.locator("html")).not.toHaveClass(/density-compact/);
-  await page.mouse.move(0, 0);
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("Control+,");
-  await expect(toggle).not.toBeChecked(); // Unapplied changes are discarded.
-  await toggle.check();
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await expect(page.locator("html")).toHaveClass(/density-compact/);
   await page.mouse.move(0, 0);
   await page.keyboard.press("Escape");
+  await expect(page.locator("#settings-page")).toBeHidden();
   expect((await first.boundingBox())!.height).toBeLessThan(originalHeight - 15);
   await expect(first).toHaveClass(/selected/);
   await page.keyboard.press("ArrowDown");
@@ -28,9 +23,11 @@ test("compact mode applies only on Save, survives reopening Settings and resets 
   await expect(toggle).toBeChecked();
   await expect(page.locator("#default-setting-compact-mode")).toHaveText("Default: Off · Customized");
   await page.getByRole("button", { name: "Reset Compact mode to default", exact: true }).click();
-  await page.locator("#settings-save-btn").click();
+  await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
   await expect(page.locator("html")).not.toHaveClass(/density-compact/);
+  await page.mouse.move(0, 0);
   await page.keyboard.press("Escape");
+  await expect(page.locator("#settings-page")).toBeHidden();
   expect((await first.boundingBox())!.height).toBe(originalHeight);
 });
 

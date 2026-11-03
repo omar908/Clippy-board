@@ -16,7 +16,7 @@ import { applyDensity } from "./ui/density";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindWindowControls } from "./ui/controls";
 import { initPreview, disposePreview, previewDismiss } from "./preview";
-import { showWindow } from "./api/window";
+import { showWindow, hideWindow } from "./api/window";
 
 const elements = getAppElements();
 const history = createHistoryController(store, elements, {
@@ -54,6 +54,9 @@ const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindin
   previewDismiss();
   await showWindow();
 });
+commands.register("window.hide", { execute: () => settings.leave(async () => {
+  await hideWindow(); previewDismiss();
+}) });
 commands.register("settings.close", { execute: settings.close });
 commands.register("settings.toggle", { exclusive: true, execute: settings.toggle });
 bindWindowControls(store, elements, selection, commands);

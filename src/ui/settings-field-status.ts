@@ -1,12 +1,28 @@
 /** Shared feedback and reset behavior for shortcuts, numeric fields and toggles. */
-export function bindSettingStatus(input: HTMLInputElement, label: string, defaultValue: string | boolean) {
+export function bindSettingStatus(input: HTMLInputElement, label: string, defaultValue: string | boolean, onReset = () => {}, onRetry = () => {}) {
   const row = input.closest<HTMLElement>(".settings-row");
-  if (!row) return { refresh() {} };
+  if (!row) return { refresh() {}, feedback(_phase: string, _message?: string, _retryable?: boolean) {}, setEnabled(_enabled: boolean) {} };
   row.classList.add("settings-row-customizable");
   const status = document.createElement("div");
   status.id = `default-${input.id}`;
   status.className = "settings-field-default";
-  input.setAttribute("aria-describedby", status.id);
+  const feedback = document.createElement("div");
+  feedback.id = `save-${input.id}`;
+  feedback.className = "settings-field-feedback";
+  feedback.setAttribute("role", "status");
+  const message = document.createElement("span");
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "settings-feedback-button";
+  retry.textContent = "Retry";
+  retry.setAttribute("aria-label", `Retry saving ${label}`);
+  retry.hidden = true;
+  retry.addEventListener("click", onRetry);
+  feedback.append(message, retry);
+  input.setAttribute("aria-describedby", `${status.id} ${feedback.id}`);
+  let enabled = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastFeedback = "";
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "settings-field-reset";
@@ -18,16 +34,30 @@ export function bindSettingStatus(input: HTMLInputElement, label: string, defaul
     const display = typeof defaultValue === "boolean" ? (defaultValue ? "On" : "Off") : defaultValue;
     status.textContent = `Default: ${display}${customized ? " · Customized" : ""}`;
     row.classList.toggle("settings-customized", customized);
-    reset.disabled = !customized;
+    reset.disabled = !enabled || !customized;
   };
   reset.addEventListener("click", () => {
     if (typeof defaultValue === "boolean") input.checked = defaultValue;
     else input.value = defaultValue;
     refresh();
+    onReset();
   });
   input.addEventListener("input", refresh);
   input.addEventListener("change", refresh);
-  row.append(reset, status);
+  row.append(reset, status, feedback);
   refresh();
-  return { refresh };
+  return { refresh,
+    setEnabled(value: boolean) { enabled = value; input.disabled = !value; refresh(); },
+    feedback(phase: string, detail?: string, retryable = true) {
+      const signature = `${phase}:${detail ?? ""}`;
+      if (lastFeedback === signature) return;
+      lastFeedback = signature;
+      clearTimeout(timer);
+      message.textContent = detail ?? ({ saving: "Saving…", saved: "Saved", pending: "Waiting to save…" }[phase] ?? "");
+      retry.hidden = phase !== "error" || !retryable;
+      feedback.dataset.state = phase;
+      input.setAttribute("aria-invalid", String(phase === "error"));
+      if (phase === "saved") timer = setTimeout(() => { message.textContent = ""; }, 2500);
+    },
+  };
 }

@@ -15,6 +15,19 @@ let startupWrites = 0;
 let maxHistory = 100;
 let deleteTtl = 60;
 let compactMode = params.has("density-compact");
+let saveFailures = 0;
+let saveDelay = 0;
+let loadFailures = 0;
+let settingsWrites = 0;
+let hideCount = 0;
+document.documentElement.dataset.hideCount = "0";
+document.documentElement.dataset.settingsWrites = "0";
+window.addEventListener("test-settings-save", event => {
+  const control = (event as CustomEvent<{ failures?: number; delay?: number; loadFailures?: number }>).detail;
+  saveFailures = control.failures ?? 0;
+  saveDelay = control.delay ?? 0;
+  loadFailures = control.loadFailures ?? 0;
+});
 let showPinnedInAll = !params.has("hide-pinned");
 document.documentElement.dataset.startupWrites = "0";
 window.addEventListener("test-startup-state", event => { startupEnabled = (event as CustomEvent<boolean>).detail; });
@@ -90,8 +103,15 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     }
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
-    case "get_settings": result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode }; break;
+    case "get_settings":
+      if (loadFailures > 0) { loadFailures--; throw new Error("Could not read settings file"); }
+      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode }; break;
     case "save_settings_cmd": {
+      document.documentElement.dataset.settingsWrites = String(++settingsWrites);
+      const fail = saveFailures > 0;
+      if (fail) saveFailures--;
+      if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
+      if (fail) throw "Could not write settings in C:/a-very-long-installation-directory/settings.json. Check the folder permissions and try again.";
       const settings = args?.settings as { shortcuts: Record<string, string>; start_on_login: boolean; show_pinned_in_all: boolean; compact_mode: boolean; max_history: number; delete_ttl_seconds: number };
       savedShortcuts = settings.shortcuts;
       showPinnedInAll = settings.show_pinned_in_all;
@@ -123,7 +143,8 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "set_listening_paused": result = args?.paused; break;
     case "set_interacting": result = args?.interacting; break;
     case "preview_hide": case "preview_show": case "preview_update": case "preview_position": case "preview_set_size":
-    case "preview_set_interactive": case "purge_expired_deleted": case "hide_window": case "show_window": break;
+    case "hide_window": document.documentElement.dataset.hideCount = String(++hideCount); break;
+    case "preview_set_interactive": case "purge_expired_deleted": case "show_window": break;
     default: throw new Error(`Unexpected native command in browser layout test: ${command}`);
   }
   return result as T;

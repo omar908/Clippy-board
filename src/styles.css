@@ -846,6 +846,7 @@ body.preview-window .preview-panel {
 
 .settings-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -1030,21 +1031,23 @@ body.preview-window .preview-panel {
   background: var(--overlay-2);
 }
 
-.settings-save-btn {
-  background: var(--accent-color);
-  border: none;
-  color: var(--text-on-accent);
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  margin-top: 8px;
+.settings-save-status {
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }
-
-.settings-save-btn:hover {
-  opacity: 0.9;
-}
+.settings-autosave-hint { color: var(--text-muted); font-size: 10px; margin-top: 3px; }
+.settings-field-feedback { grid-column: 1 / -1; color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.settings-field-feedback:has(span:empty):not(:has(button:not([hidden]))) { display: none; }
+.settings-field-feedback[data-state="error"] { color: var(--danger-color); }
+.settings-field-feedback[data-state="saved"] { color: #8ae0c4; }
+.settings-feedback-button { border: 1px solid var(--border-strong); border-radius: 4px; padding: 3px 6px; margin-left: 5px; color: var(--text-primary); background: var(--overlay-1); cursor: pointer; font-size: 11px; }
+.settings-leave-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+#settings-leave { margin-top: 6px; color: var(--text-primary); }
+[hidden] { display: none !important; }
 
 /* Footer */
 .clippy-footer {

@@ -51,6 +51,8 @@ class ElementPort {
   disabled = false;
   checked = false;
   readOnly = false;
+  hidden = false;
+  dataset: Record<string, string> = {};
   parentElement: ElementPort | null = null;
   style = { display: "none", flexDirection: "", flex: "", minHeight: "" };
   private classes = new Set<string>();
@@ -113,7 +115,7 @@ async function setup() {
     "settingsPage", "mainContent", "searchInput", "pauseBtn", "pinBtn", "clearBtn", "closeBtn",
     "countAll", "countPinned", "countText", "countImage", "countFile", "countDeleted",
     "settingsBtn", "settingMaxHistory", "settingDeleteTtl", "shortcutPinItem", "shortcutDelete",
-    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsSaveBtn", "shortcutsReset", "settingStartOnLogin", "settingShowPinned", "settingCompactMode",
+    "shortcutPause", "shortcutSearch", "settingsBackBtn", "settingsAttention", "settingsStatus", "settingsRetry", "settingsLeave", "settingsReview", "settingsDiscard", "shortcutsReset", "settingStartOnLogin", "settingShowPinned", "settingCompactMode",
   ] as const;
   const ports = Object.fromEntries(keys.map(key => [key, new ElementPort()])) as Record<typeof keys[number], ElementPort>;
   ports.searchInput.id = "search-input";
@@ -272,8 +274,10 @@ describe("keyboard integration regression contracts", () => {
     expect(restore.value).toBe("Ctrl+R");
     expect(menu.value).toBe("Alt+Space");
     restore.value = "Ctrl+K"; menu.value = "Ctrl+M";
-    await ports.settingsSaveBtn.dispatch("click");
-    expect(callsTo("save_settings_cmd")[0]?.[1]).toMatchObject({ settings: { shortcuts: { restore: "Ctrl+K", windowMenu: "Ctrl+M" } } });
+    await restore.dispatch("keydown", new TestKeyEvent("keydown", { key: "k", ctrlKey: true }));
+    await menu.dispatch("keydown", new TestKeyEvent("keydown", { key: "m", ctrlKey: true }));
+    await settleKeyboard();
+    expect(callsTo("save_settings_cmd").slice(-1)[0]?.[1]).toMatchObject({ settings: { shortcuts: { restore: "Ctrl+K", windowMenu: "Ctrl+M" } } });
     await ports.shortcutsReset.dispatch("click");
     expect(restore.value).toBe("Ctrl+R"); expect(menu.value).toBe("Alt+Space");
   });
@@ -337,13 +341,14 @@ describe("keyboard integration regression contracts", () => {
     const { dispatch, ports } = await setup();
     await ports.settingsBtn.dispatch("click");
     await settleKeyboard();
-    ports.shortcutSearch.value = "Ctrl+K";
-    await ports.settingsSaveBtn.dispatch("click");
+    await ports.shortcutSearch.dispatch("keydown", new TestKeyEvent("keydown", { key: "k", ctrlKey: true }));
+    await settleKeyboard();
     expect(callsTo("save_settings_cmd")).toHaveLength(1);
     expect(emitTo).toHaveBeenCalledWith("preview", "shortcuts-updated", {
       shortcuts: expect.objectContaining({ search: "Ctrl+K" }),
     });
     await ports.settingsBackBtn.dispatch("click");
+    await settleKeyboard();
     dispatch("f", { ctrlKey: true });
     expect(documentPort.activeElement).toBe(ports.settingsBtn);
     dispatch("k", { ctrlKey: true });
@@ -355,19 +360,21 @@ describe("keyboard integration regression contracts", () => {
     const { ports } = await setup();
     await ports.settingsBtn.dispatch("click");
     await settleKeyboard();
-    ports.shortcutPause.value = "Ctrl+F";
-    await ports.settingsSaveBtn.dispatch("click");
+    await ports.shortcutPause.dispatch("keydown", new TestKeyEvent("keydown", { key: "f", ctrlKey: true }));
+    await settleKeyboard();
     expect(callsTo("save_settings_cmd")).toEqual([]);
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining("both use Ctrl+F"));
+    expect(ports.settingsStatus.textContent).toContain("needs attention");
+    expect(alert).not.toHaveBeenCalled();
   });
 
   it("allows a shortcut to be explicitly disabled through settings", async () => {
     const { dispatch, ports } = await setup();
     await ports.settingsBtn.dispatch("click");
     await settleKeyboard();
-    ports.shortcutSearch.value = "";
-    await ports.settingsSaveBtn.dispatch("click");
+    await ports.shortcutSearch.dispatch("keydown", new TestKeyEvent("keydown", { key: "Backspace" }));
+    await settleKeyboard();
     await ports.settingsBackBtn.dispatch("click");
+    await settleKeyboard();
     expect(dispatch("f", { ctrlKey: true }).defaultPrevented).toBe(false);
     expect(documentPort.activeElement).toBe(ports.settingsBtn);
   });
@@ -457,6 +464,7 @@ describe("keyboard integration regression contracts", () => {
     runtime.forwarded!({ payload: { key: "ArrowDown" } });
     expect(selection.handleListKey).not.toHaveBeenCalled();
     runtime.forwarded!({ payload: { key: "Escape" } });
+    await settleKeyboard();
     expect(ports.settingsPage.style.display).toBe("none");
     expect(callsTo("hide_window")).toEqual([]);
   });
