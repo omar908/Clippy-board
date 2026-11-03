@@ -74,17 +74,25 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Build frontend (typecheck + vite)
-        run: npm run build
-
       - name: Run Rust tests
         working-directory: src-tauri
-        run: cargo test --locked --all-targets
+        run: cargo test --locked --all-targets --timings
 
       - name: Build debug binary with embedded assets (for smoke test)
         # `cargo build` alone points at the Vite dev server; the Tauri CLI's
         # debug build embeds dist/ while still compiling with the fast profile.
-        run: npm run tauri build -- --debug --no-bundle
+        # Keep flags inside the npm script: Windows/npm can swallow forwarded flags.
+        # Its beforeBuildCommand also typechecks/builds the frontend, once.
+        run: npm run build:debug
+
+      - name: Upload Cargo build timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-build-timings
+          path: src-tauri/target/cargo-timings/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Run CDP smoke test
         run: ./scripts/run-smoke.ps1 -Exe src-tauri/target/debug/clippy.exe -Seed
