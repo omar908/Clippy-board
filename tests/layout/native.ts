@@ -10,7 +10,12 @@ document.documentElement.dataset.copyCount = "0";
 document.documentElement.dataset.menuCount = "0";
 let menuCount = 0;
 let savedShortcuts: Record<string, string> = {};
+let currentClipboardId: string | null = params.get("clipboard");
 window.addEventListener("test-native-menu-key", () => dispatch("native-menu-key", null));
+window.addEventListener("test-current-clipboard", event => {
+  currentClipboardId = (event as CustomEvent<string | null>).detail;
+  dispatch("current-clipboard-changed", currentClipboardId);
+});
 
 function sample(id: string): ClipboardItem {
   const timestamp = 1_700_000_000_000;
@@ -64,6 +69,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
   let result: unknown;
   switch (command) {
     case "get_history": result = history; break;
+    case "get_current_clipboard_item_id": result = currentClipboardId; break;
     case "get_deleted": result = deleted; break;
     case "restore_from_deleted": {
       const restored = deleted.find(item => item.id === args?.id);
@@ -88,6 +94,8 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       }
       document.documentElement.dataset.copyCount = String(++copyCount);
       document.documentElement.dataset.lastCopyId = String(args?.id);
+      currentClipboardId = String(args?.id);
+      dispatch("current-clipboard-changed", currentClipboardId);
       break;
     case "set_pinned": result = args?.pinned; break;
     case "set_listening_paused": result = args?.paused; break;

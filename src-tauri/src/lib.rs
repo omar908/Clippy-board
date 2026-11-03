@@ -3,6 +3,12 @@ pub mod settings;
 pub mod storage;
 mod window_menu;
 mod item_selection;
+mod current_clipboard;
+
+#[tauri::command]
+fn get_current_clipboard_item_id(state: State<ClipboardState>) -> Option<String> {
+    current_clipboard::item_id(&state, now_ms())
+}
 
 #[tauri::command]
 fn show_window_menu(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -39,7 +45,13 @@ fn get_history(state: State<ClipboardState>) -> Vec<ClipboardItem> {
 
 #[tauri::command]
 fn select_item(app: AppHandle, state: State<ClipboardState>, id: String) -> Result<(), String> {
-    let item = item_selection::copy(&state, &id, now_ms(), clipboard::write_clipboard)?;
+    let result = item_selection::copy(&state, &id, now_ms(), |payload| {
+        clipboard::write_clipboard(payload)?;
+        *state.current_payload.lock().unwrap() = Some(payload.clone());
+        Ok(())
+    });
+    current_clipboard::publish(&app);
+    let item = result?;
     let _ = app.emit("clipboard-updated", &item);
     // Like every other hide path, copy-dismiss checks IS_PINNED
     // (ADR-0002): a pinned window stays open after copying so you can
@@ -741,7 +753,7 @@ pub fn run() {
 
             // Start clipboard monitor
             let app_handle = app.handle().clone();
-            clipboard::start_clipboard_monitor(app_handle, history_arc, db_arc);
+            clipboard::start_clipboard_monitor(app_handle, app.state::<ClipboardState>().inner().clone());
             app_log("Clipboard monitor started");
 
             // Register global shortcut
@@ -852,6 +864,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_history,
+            get_current_clipboard_item_id,
             select_item,
             delete_item,
             toggle_pin,

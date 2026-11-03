@@ -3,6 +3,7 @@ import type { AppElements } from "../elements";
 import { createItemCard, renderItemMeta, renderTime, renderActions } from "./item";
 import { renderTextContent, renderImageContent, renderFileContent } from "./content";
 import { renderEmptyState } from "./empty";
+import { renderClipboardStatus } from "./clipboard-status";
 
 export type ListActions = {
   selectItem: (id: string) => void;
@@ -97,6 +98,7 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
       console.error("Error rendering item:", e, item);
     }
   });
+  renderClipboardStatus(historyList, state.currentClipboardId);
   // Jump instantly: a smooth animation restarts on every arrow key (and
   // key-repeat), so the list perpetually trails the highlight.
   const activeEl = historyList.querySelector(".history-item.selected") as HTMLElement | null;

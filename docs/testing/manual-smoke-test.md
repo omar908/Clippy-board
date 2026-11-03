@@ -39,6 +39,18 @@ to be mode-specific.
 
 ## 2. Selection model
 
+- [ ] The entry matching the system clipboard shows an "On clipboard" badge
+      and a green border. Select another entry with arrows/hover: the badge
+      stays with the clipboard contents, separate from the blue selection.
+- [ ] Copy a different text, image, or file selection outside Clippy: the badge
+      follows it. Clear the clipboard or copy unsupported content: no badge.
+- [ ] Pause listening, then copy content matching an older entry: its badge
+      updates without adding/reordering history. Unmatched content has no badge.
+- [ ] Restart with matching clipboard contents: the correct badge appears
+      without reordering history. Copy an entry in Clippy: the badge follows it.
+- [ ] Soft-delete the current entry: its badge appears in Deleted; restore it
+      without copying and it returns to All. Permanent deletion leaves no badge.
+
 - [ ] Hovering a card moves the highlight to it and opens the preview.
 - [ ] Arrow keys move the highlight and update the preview.
 - [ ] First arrow press hides the cursor and ignores hover until the pointer

@@ -42,6 +42,10 @@ Settings coverage includes the Ctrl+R Restore default, overrides, and native
 Alt+Space forwarding, recording, rebinding, and explicit disabling. The native
 key notification and menu display command are simulated at the Tauri boundary;
 opening the real Windows menu still requires a native/manual check.
+Current-clipboard coverage checks a single readable badge distinct from selection,
+no-match startup, status updates while paused, app copying, and narrow cards for
+text, long text, images, and files. Clipboard notifications are mocked; native
+matching and frontend snapshot/event races have separate unit coverage.
 
 Tests fail on browser JavaScript errors and console errors. They use bounding-box
 invariants rather than pixel-perfect screenshot baselines, so ordinary cosmetic
