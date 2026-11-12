@@ -127,6 +127,10 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       result = { ...settings, start_on_login: startupEnabled };
       break;
     }
+    case "signed_update_available": result = params.has("signed-update"); break;
+    case "install_signed_update":
+      document.documentElement.dataset.installVersion = String(args?.version);
+      throw "Invalid update signature";
     case "plugin:opener|open_url": document.documentElement.dataset.openedUrl = String(args?.url); break;
     case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
     case "is_pointer_held": result = false; break;

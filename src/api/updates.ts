@@ -1,4 +1,5 @@
 import { version as installedVersion } from "../../package.json";
+import { invoke } from "@tauri-apps/api/core";
 
 const repository = "omar908/Clippy-board";
 const endpoint = `https://api.github.com/repos/${repository}/releases/latest`;
@@ -27,4 +28,17 @@ export async function checkLatestRelease() {
     }
   }
   return null;
+}
+
+export async function lookupUpdate() {
+  const release = await checkLatestRelease();
+  if (!release) return null;
+  // A published release may predate signing or its manifest may be unavailable.
+  const installable = await invoke<boolean>("signed_update_available", { version: release.version })
+    .catch(() => false);
+  return { ...release, installable };
+}
+
+export function installSignedUpdate(version: string) {
+  return invoke<void>("install_signed_update", { version });
 }
