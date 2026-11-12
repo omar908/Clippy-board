@@ -5,6 +5,7 @@ mod window_menu;
 mod item_selection;
 mod current_clipboard;
 mod startup;
+mod updates;
 
 #[tauri::command]
 fn get_current_clipboard_item_id(state: State<ClipboardState>) -> Option<String> {
@@ -641,6 +642,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::Builder::new().app_name(APP_NAME).build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, s, event| {
@@ -899,6 +901,8 @@ pub fn run() {
             get_listening_paused,
             get_settings,
             save_settings_cmd,
+            updates::signed_update_available,
+            updates::install_signed_update,
             set_interacting,
             is_pointer_held,
             preview_show,
