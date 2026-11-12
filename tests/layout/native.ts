@@ -1,4 +1,5 @@
 import type { ClipboardItem, DeletedItem } from "../../src/types";
+import type { AppSettings } from "../../src/api/settings";
 
 // Deterministic native boundary for a real browser. These tests do not model
 // OS focus, physical monitor switching, native IPC, or a second native window.
@@ -15,6 +16,7 @@ let startupWrites = 0;
 let maxHistory = 100;
 let deleteTtl = 60;
 let compactMode = params.has("density-compact");
+let automaticUpdateChecks = true;
 let saveFailures = 0;
 let saveDelay = 0;
 let loadFailures = 0;
@@ -105,17 +107,18 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
     case "get_settings":
       if (loadFailures > 0) { loadFailures--; throw new Error("Could not read settings file"); }
-      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode }; break;
+      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode, automatic_update_checks: automaticUpdateChecks }; break;
     case "save_settings_cmd": {
       document.documentElement.dataset.settingsWrites = String(++settingsWrites);
       const fail = saveFailures > 0;
       if (fail) saveFailures--;
       if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
       if (fail) throw "Could not write settings in C:/a-very-long-installation-directory/settings.json. Check the folder permissions and try again.";
-      const settings = args?.settings as { shortcuts: Record<string, string>; start_on_login: boolean; show_pinned_in_all: boolean; compact_mode: boolean; max_history: number; delete_ttl_seconds: number };
+      const settings = args?.settings as AppSettings;
       savedShortcuts = settings.shortcuts;
       showPinnedInAll = settings.show_pinned_in_all;
       compactMode = settings.compact_mode;
+      automaticUpdateChecks = settings.automatic_update_checks;
       maxHistory = settings.max_history; deleteTtl = settings.delete_ttl_seconds;
       if (args?.updateStartup) {
         startupEnabled = settings.start_on_login;
@@ -124,6 +127,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       result = { ...settings, start_on_login: startupEnabled };
       break;
     }
+    case "plugin:opener|open_url": document.documentElement.dataset.openedUrl = String(args?.url); break;
     case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
     case "is_pointer_held": result = false; break;
     case "select_item":

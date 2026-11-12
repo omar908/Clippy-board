@@ -148,6 +148,18 @@ html, body {
   color: var(--text-primary);
 }
 
+#settings-btn.update-available { position: relative; }
+#settings-btn.update-available::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-text);
+}
+
 .icon-btn.active {
   background: var(--accent-color);
   color: var(--text-on-accent);

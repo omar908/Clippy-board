@@ -20,6 +20,12 @@ pub struct AppSettings {
     pub show_pinned_in_all: bool,
     #[serde(default)]
     pub compact_mode: bool,
+    #[serde(default = "default_automatic_update_checks")]
+    pub automatic_update_checks: bool,
+}
+
+fn default_automatic_update_checks() -> bool {
+    true
 }
 
 fn default_show_pinned() -> bool {
@@ -44,6 +50,7 @@ impl Default for AppSettings {
             start_on_login: false,
             show_pinned_in_all: true,
             compact_mode: false,
+            automatic_update_checks: default_automatic_update_checks(),
         }
     }
 }
@@ -58,6 +65,7 @@ mod tests {
         assert!(settings.show_pinned_in_all);
         assert!(!settings.start_on_login);
         assert!(!settings.compact_mode);
+        assert!(settings.automatic_update_checks);
         assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
     }
 

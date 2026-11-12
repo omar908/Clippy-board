@@ -5,7 +5,7 @@ import { normalizeShortcut, shortcutFromEvent } from "../shortcut-combo";
 import type { AppElements } from "./elements";
 import { bindSettingStatus } from "./settings-field-status";
 
-type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "compact_mode";
+type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "compact_mode" | "automatic_update_checks";
 export type SettingField = {
   input: HTMLInputElement; label: string; key: ScalarKey | "shortcuts";
   shortcutKey?: string; defaultValue: string | boolean;
@@ -51,6 +51,7 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
     [elements.settingStartOnLogin, "Start with Windows", "start_on_login"],
     [elements.settingShowPinned, "Show pinned items in All", "show_pinned_in_all"],
     [elements.settingCompactMode, "Compact mode", "compact_mode"],
+    [elements.settingAutomaticUpdateChecks, "Check for updates automatically", "automatic_update_checks"],
   ] as const) {
     const value = defaultSettings[key];
     add(input, label, key, typeof value === "boolean" ? value : String(value), settings => {

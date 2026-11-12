@@ -13,6 +13,7 @@ Download the Windows installer from [GitHub Releases](https://github.com/omar908
 - Pin items you want to keep and use the Deleted tab to restore recently deleted items.
 - Look for the **On clipboard** badge to see which history entry matches the current clipboard.
 - Open Settings with **Ctrl+,** to change shortcuts, enable Start with Windows, adjust history retention, or turn on Compact mode. Changes save as you edit.
+- In **Settings → About**, use **Check for updates** to look for a newer release and open its GitHub page to download the installer. Automatic checks are on by default and can be turned off in the same section.
 
 Clipboard history is stored locally in SQLite under the app's Windows data directory, typically `%APPDATA%\com.clippy.app\history.db`. File entries retain file paths. Use **Ctrl+P** to pause or resume clipboard capture.
 

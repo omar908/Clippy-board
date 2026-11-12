@@ -14,11 +14,13 @@ import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
 import { applyDensity } from "./ui/density";
 import { bindSettingsEvents } from "./ui/settings";
+import { bindUpdateControls } from "./ui/updates";
 import { bindWindowControls } from "./ui/controls";
 import { initPreview, disposePreview, previewDismiss } from "./preview";
 import { showWindow, hideWindow } from "./api/window";
 
 const elements = getAppElements();
+let updates: ReturnType<typeof bindUpdateControls> | undefined;
 const history = createHistoryController(store, elements, {
   renderList: () => renderList(elements, () => store.get(), {
     selectItem: id => { void commands.execute("item.copy", id); },
@@ -30,7 +32,10 @@ const history = createHistoryController(store, elements, {
     isHoverBlocked: selection.isHoverBlocked,
   }),
   onSelected: () => selection.anchorAfterCopy(),
-  onSettingsLoaded: preferences => applyDensity(preferences.compact_mode),
+  onSettingsLoaded: preferences => {
+    applyDensity(preferences.compact_mode);
+    updates?.setAutomatic(preferences.automatic_update_checks);
+  },
 });
 const selection = createSelectionController(store, elements, {
   renderList: history.renderList,
@@ -48,6 +53,7 @@ const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
 const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), undefined, preferences => {
   applyDensity(preferences.compact_mode);
+  updates?.setAutomatic(preferences.automatic_update_checks);
   store.set({ showPinnedInAll: preferences.show_pinned_in_all });
   updateCounts(); filterAndRender();
 }, async () => {
@@ -60,7 +66,10 @@ commands.register("window.hide", { execute: () => settings.leave(async () => {
 commands.register("settings.close", { execute: settings.close });
 commands.register("settings.toggle", { exclusive: true, execute: settings.toggle });
 bindWindowControls(store, elements, selection, commands);
-window.addEventListener("beforeunload", () => disposePreview());
+window.addEventListener("beforeunload", () => {
+  updates?.dispose();
+  disposePreview();
+});
 
 // Setup real-time clipboard listener
 async function setupListener() {
@@ -117,6 +126,7 @@ window.addEventListener("DOMContentLoaded", () => {
   });
   if (label === "preview")
     return;
+  updates = bindUpdateControls(elements.settingsBtn);
   void currentClipboard.start().catch(error => console.error("Could not track current clipboard:", error));
   fetchInitialHistory();
   setupListener();
