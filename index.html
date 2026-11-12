@@ -157,6 +157,16 @@
                 <div>Clippy-board v0.3.0</div>
                 <div class="settings-about-sub">Clipboard Manager</div>
               </div>
+              <div class="settings-row">
+                <div class="settings-row-info">
+                  <label for="setting-automatic-update-checks" class="settings-row-label">Check for updates automatically</label>
+                  <div class="settings-row-desc">Check GitHub at startup and once a day while Clippy-board is running.</div>
+                </div>
+                <input type="checkbox" id="setting-automatic-update-checks" class="settings-checkbox" checked disabled />
+              </div>
+              <button type="button" id="check-for-updates" class="settings-btn">Check for updates</button>
+              <div id="update-status" class="settings-row-desc" role="status"></div>
+              <button type="button" id="open-update-release" class="settings-btn" hidden>Open release page</button>
             </div>
           </div>
           <div class="settings-save-status">

@@ -21,6 +21,7 @@ vi.mock("./ui/render/list", () => ({ renderList: runtime.renderList }));
 vi.mock("./ui/keyboard", () => ({ bindKeyboardEvents: vi.fn() }));
 vi.mock("./ui/search", () => ({ bindSearchEvents: vi.fn() }));
 vi.mock("./ui/settings", () => ({ bindSettingsEvents: vi.fn(() => ({ open: vi.fn(), close: vi.fn(), toggle: vi.fn() })) }));
+vi.mock("./ui/updates", () => ({ bindUpdateControls: vi.fn(() => ({ setAutomatic: vi.fn(), dispose: vi.fn() })) }));
 vi.mock("./ui/controls", () => ({ bindWindowControls: vi.fn() }));
 vi.mock("./ui/elements", () => ({ getAppElements: () => {
   const counter = () => ({ textContent: "" });

@@ -8,11 +8,13 @@ export type AppSettings = {
   start_on_login: boolean;
   show_pinned_in_all: boolean;
   compact_mode: boolean;
+  automatic_update_checks: boolean;
 };
 
 export const defaultSettings: AppSettings = {
   max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
   shortcuts: {}, start_on_login: false, show_pinned_in_all: true, compact_mode: false,
+  automatic_update_checks: true,
 };
 
 export async function getSettings() {
