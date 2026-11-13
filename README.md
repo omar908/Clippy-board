@@ -14,6 +14,7 @@ Download the Windows installer from [GitHub Releases](https://github.com/omar908
 - Look for the **On clipboard** badge to see which history entry matches the current clipboard.
 - Open Settings with **Ctrl+,** to change shortcuts, enable Start with Windows, adjust history retention, or turn on Compact mode. Changes save as you edit.
 - Under **Settings → Appearance**, choose Follow Windows (the default), Dark, Light, or OLED black. The theme applies to the main window and the separate preview.
+- Under **Settings → Appearance → Font**, choose System (the default) or OpenDyslexic. OpenDyslexic is bundled for offline use in both windows under the [SIL Open Font License](public/fonts/opendyslexic/OFL.txt). [Upstream font source](https://github.com/antijingoist/opendyslexic/tree/1824da5c0e41dc3e13ffc7f3a636dcaf695d61b7)
 - Use **Check for updates** in the Settings header to look for a newer release. Choose **Install and restart** when a signed update is available, or **Open release page** to download an installer. Automatic checks are on by default and can be turned off under **Settings → About**.
 
 Clipboard history is stored locally in SQLite under the app's Windows data directory, typically `%APPDATA%\com.clippy.app\history.db`. File entries retain file paths. Use **Ctrl+P** to pause or resume clipboard capture.

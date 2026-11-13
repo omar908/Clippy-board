@@ -1,5 +1,21 @@
+@font-face {
+  font-family: OpenDyslexic;
+  src: url("/fonts/opendyslexic/OpenDyslexic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: OpenDyslexic;
+  src: url("/fonts/opendyslexic/OpenDyslexic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
+  --system-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --app-font: var(--system-font);
 
   /* Surfaces */
   --bg-window: rgba(24, 26, 32, 0.94);
@@ -130,6 +146,14 @@
   --text-muted: #9ca3af;
 }
 
+:root[data-font="open-dyslexic"] {
+  --app-font: OpenDyslexic, var(--system-font);
+}
+
+[data-font="open-dyslexic"] :is(button, input, select, .file-path, .preview-file-row) {
+  font-family: var(--app-font);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -142,7 +166,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--app-font);
   color: var(--text-primary);
   font-size: 13px;
 }
@@ -998,6 +1022,14 @@ body.preview-window .preview-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 100px auto;
   gap: 6px 8px;
+}
+
+.settings-row-customizable:has(select) {
+  grid-template-columns: minmax(0, 1fr) 134px auto;
+}
+
+.settings-input:is(select) {
+  width: 100%;
 }
 
 .settings-field-default {

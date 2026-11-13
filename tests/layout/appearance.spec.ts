@@ -38,3 +38,28 @@ test("separate preview applies the saved OLED palette", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "oled");
   await expect(page.locator(".clippy-popup")).toHaveCSS("background-color", "rgb(0, 0, 0)");
 });
+
+test("OpenDyslexic loads from bundled assets and saves in compact Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 420 });
+  await page.route("**/*", route => new URL(route.request().url()).hostname === "127.0.0.1"
+    ? route.continue() : route.abort());
+  await page.goto("/?mode=main&density-compact=1");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.keyboard.press("Control+,");
+  const font = page.getByRole("combobox", { name: "Font" });
+  await expect(font).toHaveValue("system");
+  await font.selectOption("open-dyslexic");
+  await expect(page.locator("html")).toHaveAttribute("data-font", "open-dyslexic");
+  const loaded = await page.evaluate(async () =>
+    (await document.fonts.load("12px OpenDyslexic", "Clipboard")).map(face => face.status));
+  expect(loaded).toEqual(["loaded"]);
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.locator(".history-item").first()).toHaveCSS("font-family", /^OpenDyslexic/);
+  await page.keyboard.press("Control+,");
+  await expect(font).toHaveValue("open-dyslexic");
+  await page.getByRole("button", { name: "Reset Font to default" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-font", "system");
+
+  await page.goto("/?mode=preview&font=open-dyslexic");
+  await expect(page.locator("#preview-body")).toHaveCSS("font-family", /^OpenDyslexic/);
+});
