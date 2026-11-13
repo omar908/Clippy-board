@@ -14,12 +14,13 @@ export type AppSettings = {
   automatic_update_checks: boolean;
   theme: Theme;
   font: AppearanceFont;
+  text_size: "85" | "100" | "115" | "130";
 };
 
 export const defaultSettings: AppSettings = {
   max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
   shortcuts: {}, start_on_login: false, show_pinned_in_all: true, compact_mode: false,
-  automatic_update_checks: true, theme: "system", font: "system",
+  automatic_update_checks: true, theme: "system", font: "system", text_size: "100",
 };
 
 export async function getSettings() {

@@ -37,6 +37,21 @@ pub struct AppSettings {
     pub theme: Theme,
     #[serde(default)]
     pub font: AppearanceFont,
+    #[serde(default)]
+    pub text_size: TextSize,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextSize {
+    #[serde(rename = "85")]
+    Small,
+    #[serde(rename = "115")]
+    Large,
+    #[serde(rename = "130")]
+    Largest,
+    #[default]
+    #[serde(rename = "100", other)]
+    Standard,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +92,7 @@ impl Default for AppSettings {
             automatic_update_checks: default_automatic_update_checks(),
             theme: Theme::default(),
             font: AppearanceFont::default(),
+            text_size: TextSize::default(),
         }
     }
 }
@@ -94,20 +110,23 @@ mod tests {
         assert!(settings.automatic_update_checks);
         assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.font, AppearanceFont::System);
+        assert_eq!(settings.text_size, TextSize::Standard);
         assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
     }
 
     #[test]
-    fn compact_mode_and_font_round_trip() {
+    fn compact_mode_and_font_preferences_round_trip() {
         let settings = AppSettings {
             compact_mode: true,
             font: AppearanceFont::OpenDyslexic,
+            text_size: TextSize::Small,
             ..AppSettings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
         let loaded: AppSettings = serde_json::from_str(&json).unwrap();
         assert!(loaded.compact_mode);
         assert_eq!(loaded.font, AppearanceFont::OpenDyslexic);
+        assert_eq!(loaded.text_size, TextSize::Small);
     }
 }
 

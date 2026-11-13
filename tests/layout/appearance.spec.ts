@@ -1,5 +1,24 @@
 import { expect, test } from "./helpers";
 
+test("text size can decrease, increase and reset in compact Settings", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 420 });
+  await page.goto("/?mode=main&density-compact=1&font=open-dyslexic");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.keyboard.press("Control+,");
+  const size = page.getByRole("combobox", { name: "Text size" });
+  await expect(size).toHaveValue("100");
+  await size.selectOption("85");
+  await expect(page.locator("body")).toHaveCSS("font-size", "11.05px");
+  await size.selectOption("130");
+  await expect(page.locator("body")).toHaveCSS("font-size", "16.9px");
+  expect(await page.locator(".settings-content").evaluate(element =>
+    element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Reset Text size to default" }).click();
+  await expect(page.locator("body")).toHaveCSS("font-size", "13px");
+  await page.goto("/?mode=preview&text-size=130");
+  await expect(page.locator(".preview-text")).toHaveCSS("font-size", "16.25px");
+});
+
 test("Appearance defaults to Follow Windows, saves overrides, and resets", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 420 });
   await page.emulateMedia({ colorScheme: "light" });

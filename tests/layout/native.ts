@@ -17,6 +17,7 @@ let maxHistory = 100;
 let deleteTtl = 60;
 let compactMode = params.has("density-compact");
 let theme = params.get("theme") ?? "system";
+let textSize = params.get("text-size") ?? "100";
 let font = params.get("font") ?? "system";
 let automaticUpdateChecks = true;
 let saveFailures = 0;
@@ -109,7 +110,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
     case "get_settings":
       if (loadFailures > 0) { loadFailures--; throw new Error("Could not read settings file"); }
-      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode, automatic_update_checks: automaticUpdateChecks, theme, font }; break;
+      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode, automatic_update_checks: automaticUpdateChecks, theme, font, text_size: textSize }; break;
     case "save_settings_cmd": {
       document.documentElement.dataset.settingsWrites = String(++settingsWrites);
       const fail = saveFailures > 0;
@@ -122,6 +123,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       compactMode = settings.compact_mode;
       theme = settings.theme;
       font = settings.font;
+      textSize = settings.text_size;
       automaticUpdateChecks = settings.automatic_update_checks;
       maxHistory = settings.max_history; deleteTtl = settings.delete_ttl_seconds;
       if (args?.updateStartup) {

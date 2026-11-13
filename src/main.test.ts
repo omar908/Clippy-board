@@ -101,8 +101,9 @@ describe("application startup", () => {
     expect(runtime.events.has("clipboard-updated")).toBe(false);
     expect(document.documentElement.dataset.theme).toBe("oled");
     expect(document.documentElement.dataset.font).toBe("system");
-    runtime.events.get("appearance-changed")!({ payload: { theme: "light", font: "open-dyslexic" } });
+    runtime.events.get("appearance-changed")!({ payload: { theme: "light", font: "open-dyslexic", text_size: "130" } });
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.font).toBe("open-dyslexic");
+    expect(document.documentElement.dataset.textSize).toBe("130");
   });
 });
