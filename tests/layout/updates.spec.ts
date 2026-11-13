@@ -49,11 +49,37 @@ test("a failed signed installation leaves the release page and retry available",
   await expect(page.locator("#update-status")).toBeInViewport({ ratio: 1 });
   await expect(install).toBeInViewport({ ratio: 1 });
   await install.click();
+  const dialog = page.getByRole("dialog", { name: "Install update?" });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("html")).not.toHaveAttribute("data-install-version", /.+/);
+  await dialog.getByRole("button", { name: "Install and restart" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-install-version", "999.0.0");
+  await page.getByRole("dialog", { name: "Update failed" }).getByRole("button", { name: "Close" }).click();
   await expect(page.locator("#update-status")).toContainText("Couldn’t install the signed update");
   const retry = page.getByRole("button", { name: "Retry", exact: true });
   await expect(retry).toBeEnabled();
   await expect(retry).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("button", { name: "Open release page" })).toBeInViewport({ ratio: 1 });
   expect(await content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+});
+
+test("automatic updates offer the same confirmation from the main window", async ({ page }) => {
+  await page.clock.install();
+  await page.route("https://api.github.com/repos/omar908/Clippy-board/releases/latest", route =>
+    route.fulfill({ json: { tag_name: "v999.0.0" }, headers: { "Access-Control-Allow-Origin": "*" } }),
+  );
+  await page.goto("/?mode=main&signed-update=1");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.clock.fastForward(31_000);
+  const button = page.getByRole("button", { name: "Update available", exact: true });
+  await button.click();
+  const dialog = page.getByRole("dialog", { name: "Install update?" });
+  await expect(dialog).toContainText("999.0.0");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(page.locator("html")).not.toHaveAttribute("data-install-version", /.+/);
+  await button.click();
+  await dialog.getByRole("button", { name: "Install and restart" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-install-version", "999.0.0");
+  await expect(page.getByRole("dialog", { name: "Update failed" })).toBeVisible();
 });

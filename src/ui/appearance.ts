@@ -1,15 +1,16 @@
 import { listen } from "@tauri-apps/api/event";
 import { getSettings, type AppSettings } from "../api/settings";
 
-type Appearance = Pick<AppSettings, "theme" | "font">;
+type Appearance = Pick<AppSettings, "theme" | "font" | "text_size">;
 
 let stopFollowingSystem: (() => void) | undefined;
 
-export function applyAppearance({ theme, font }: Appearance) {
+export function applyAppearance({ theme, font, text_size }: Appearance) {
   stopFollowingSystem?.();
   stopFollowingSystem = undefined;
   const root = document.documentElement;
   root.dataset.font = font;
+  root.dataset.textSize = text_size;
   if (theme !== "system") {
     root.dataset.theme = theme;
     return;

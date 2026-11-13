@@ -27,6 +27,17 @@
             <button id="close-btn" class="icon-btn" title="Close (Esc)">✕</button>
           </div>
         </header>
+        <button type="button" id="update-available-btn" class="settings-btn update-available-btn" hidden>Update available</button>
+
+        <dialog id="update-dialog" aria-labelledby="update-dialog-title" aria-describedby="update-dialog-status">
+          <h2 id="update-dialog-title">Install update?</h2>
+          <p id="update-dialog-status" role="status"></p>
+          <div class="update-dialog-actions">
+            <button type="button" id="update-dialog-release" class="settings-btn" hidden>Open release page</button>
+            <button type="button" id="cancel-update" class="settings-btn" autofocus>Cancel</button>
+            <button type="button" id="confirm-update" class="settings-btn">Install and restart</button>
+          </div>
+        </dialog>
 
         <!-- Settings Page -->
         <div id="settings-page" class="settings-page" style="display: none;">
@@ -175,6 +186,15 @@
                 <select id="setting-font" class="settings-input" disabled>
                   <option value="system">System</option>
                   <option value="open-dyslexic">OpenDyslexic</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <label class="settings-row-label" for="setting-text-size">Text size</label>
+                <select id="setting-text-size" class="settings-input" disabled>
+                  <option value="85">85%</option>
+                  <option value="100" selected>100%</option>
+                  <option value="115">115%</option>
+                  <option value="130">130%</option>
                 </select>
               </div>
             </div>

@@ -288,7 +288,7 @@ fn save_settings_cmd(
     let _ = app.emit_to(
         "preview",
         "appearance-changed",
-        serde_json::json!({ "theme": settings.theme, "font": settings.font }),
+        serde_json::json!({ "theme": settings.theme, "font": settings.font, "text_size": settings.text_size }),
     );
     Ok(settings)
 }
