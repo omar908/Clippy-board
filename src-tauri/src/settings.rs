@@ -4,6 +4,17 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri::Manager;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Theme {
+    Light,
+    Oled,
+    Dark,
+    #[default]
+    #[serde(other)]
+    System,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default = "default_max_history")]
@@ -22,6 +33,8 @@ pub struct AppSettings {
     pub compact_mode: bool,
     #[serde(default = "default_automatic_update_checks")]
     pub automatic_update_checks: bool,
+    #[serde(default)]
+    pub theme: Theme,
 }
 
 fn default_automatic_update_checks() -> bool {
@@ -51,6 +64,7 @@ impl Default for AppSettings {
             show_pinned_in_all: true,
             compact_mode: false,
             automatic_update_checks: default_automatic_update_checks(),
+            theme: Theme::default(),
         }
     }
 }
@@ -66,6 +80,7 @@ mod tests {
         assert!(!settings.start_on_login);
         assert!(!settings.compact_mode);
         assert!(settings.automatic_update_checks);
+        assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
     }
 

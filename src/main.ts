@@ -13,6 +13,7 @@ import { createSelectionController } from "./ui/selection";
 import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
 import { applyDensity } from "./ui/density";
+import { applyTheme, watchPreviewTheme } from "./ui/theme";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindUpdateControls } from "./ui/updates";
 import { bindWindowControls } from "./ui/controls";
@@ -34,6 +35,7 @@ const history = createHistoryController(store, elements, {
   onSelected: () => selection.anchorAfterCopy(),
   onSettingsLoaded: preferences => {
     applyDensity(preferences.compact_mode);
+    applyTheme(preferences.theme);
     updates?.setAutomatic(preferences.automatic_update_checks);
   },
 });
@@ -53,6 +55,7 @@ const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
 const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), undefined, preferences => {
   applyDensity(preferences.compact_mode);
+  applyTheme(preferences.theme);
   updates?.setAutomatic(preferences.automatic_update_checks);
   store.set({ showPinnedInAll: preferences.show_pinned_in_all });
   updateCounts(); filterAndRender();
@@ -124,8 +127,10 @@ window.addEventListener("DOMContentLoaded", () => {
       return "timestamp" in item ? item : { ...item, timestamp: item.original_timestamp };
     },
   });
-  if (label === "preview")
+  if (label === "preview") {
+    void watchPreviewTheme().catch(error => console.error("Could not load preview theme:", error));
     return;
+  }
   updates = bindUpdateControls(elements.settingsBtn);
   void currentClipboard.start().catch(error => console.error("Could not track current clipboard:", error));
   fetchInitialHistory();

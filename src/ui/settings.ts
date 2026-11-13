@@ -80,7 +80,7 @@ export function bindSettingsEvents(elements: AppElements,
     }, ready);
   }
   function commitNumbers() {
-    for (const field of fields.filter(f => typeof f.defaultValue === "string" && !f.shortcutKey)) {
+    for (const field of fields.filter(f => f.key === "max_history" || f.key === "delete_ttl_seconds")) {
       const state = queue?.state(field.key);
       if (state?.phase === "pending" && state.message) edit(field, true);
     }
