@@ -39,7 +39,11 @@ beforeEach(() => {
   runtime.events.clear();
   runtime.label = "main";
   runtime.invoke.mockResolvedValue([]);
-  vi.stubGlobal("window", { addEventListener: (name: string, callback: () => void) => runtime.handlers.set(name, callback) });
+  vi.stubGlobal("document", { documentElement: { dataset: {} } });
+  vi.stubGlobal("window", {
+    addEventListener: (name: string, callback: () => void) => runtime.handlers.set(name, callback),
+    matchMedia: () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
+  });
 });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -88,11 +92,15 @@ describe("application startup", () => {
 
   it("initializes the preview webview without fetching main history or listening for clipboard updates", async () => {
     runtime.label = "preview";
+    runtime.invoke.mockImplementation(async command => command === "get_settings" ? { theme: "oled" } : []);
     await import("./main");
     runtime.handlers.get("DOMContentLoaded")!();
     await vi.advanceTimersByTimeAsync(0);
     expect(runtime.initPreview).toHaveBeenCalledOnce();
     expect(runtime.invoke).not.toHaveBeenCalledWith("get_history");
     expect(runtime.events.has("clipboard-updated")).toBe(false);
+    expect(document.documentElement.dataset.theme).toBe("oled");
+    runtime.events.get("appearance-theme-changed")!({ payload: "light" });
+    expect(document.documentElement.dataset.theme).toBe("light");
   });
 });

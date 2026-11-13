@@ -5,9 +5,9 @@ import { normalizeShortcut, shortcutFromEvent } from "../shortcut-combo";
 import type { AppElements } from "./elements";
 import { bindSettingStatus } from "./settings-field-status";
 
-type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "compact_mode" | "automatic_update_checks";
+type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "compact_mode" | "automatic_update_checks" | "theme";
 export type SettingField = {
-  input: HTMLInputElement; label: string; key: ScalarKey | "shortcuts";
+  input: HTMLInputElement | HTMLSelectElement; label: string; key: ScalarKey | "shortcuts";
   shortcutKey?: string; defaultValue: string | boolean;
   read: (settings: AppSettings) => string | boolean;
   status: ReturnType<typeof bindSettingStatus>;
@@ -15,7 +15,7 @@ export type SettingField = {
 
 export function createSettingsFields(elements: AppElements, edit: (field: SettingField, ready: boolean) => void) {
   const fields: SettingField[] = [];
-  function add(input: HTMLInputElement, label: string, key: ScalarKey | "shortcuts", defaultValue: string | boolean,
+  function add(input: SettingField["input"], label: string, key: ScalarKey | "shortcuts", defaultValue: string | boolean,
     read: SettingField["read"], shortcutKey?: string) {
     let editing = false;
     input.setAttribute("aria-label", label);
@@ -23,11 +23,12 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
       status: bindSettingStatus(input, label, defaultValue,
         () => { editing = false; edit(field, true); }, () => { editing = false; edit(field, true); }) };
     fields.push(field);
-    if (shortcutKey) {
-      input.placeholder = "Disabled";
+    if (shortcutKey && input.tagName === "INPUT") {
+      const recorder = input as HTMLInputElement;
+      recorder.placeholder = "Disabled";
       input.classList.add("shortcut-recorder");
       input.title = "Press a shortcut to save it automatically; Backspace disables it.";
-      input.addEventListener("keydown", event => {
+      recorder.addEventListener("keydown", event => {
         if (event.key === "Tab" || event.key === "Escape") return;
         event.preventDefault(); event.stopPropagation();
         const combo = shortcutFromEvent(event);
@@ -35,12 +36,12 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
         input.value = combo === "Backspace" ? "" : combo;
         field.status.refresh(); edit(field, true);
       });
-    } else if (typeof defaultValue === "boolean") {
+    } else if (typeof defaultValue === "boolean" || input.tagName === "SELECT") {
       input.addEventListener("change", () => edit(field, true));
     } else {
       input.addEventListener("input", () => { editing = true; edit(field, false); });
       input.addEventListener("blur", () => { if (editing) { editing = false; edit(field, true); } });
-      input.addEventListener("keydown", event => {
+      (input as HTMLInputElement).addEventListener("keydown", event => {
         if (event.key === "Enter") { event.preventDefault(); editing = false; edit(field, true); }
       });
     }
@@ -52,6 +53,7 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
     [elements.settingShowPinned, "Show pinned items in All", "show_pinned_in_all"],
     [elements.settingCompactMode, "Compact mode", "compact_mode"],
     [elements.settingAutomaticUpdateChecks, "Check for updates automatically", "automatic_update_checks"],
+    [elements.settingTheme, "Theme", "theme"],
   ] as const) {
     const value = defaultSettings[key];
     add(input, label, key, typeof value === "boolean" ? value : String(value), settings => {
@@ -80,13 +82,14 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
 }
 
 export function fieldValue(field: SettingField) {
-  return typeof field.defaultValue === "boolean" ? field.input.checked : field.input.value;
+  return "checked" in field.input && typeof field.defaultValue === "boolean" ? field.input.checked : field.input.value;
 }
 
 export function renderField(field: SettingField, settings: AppSettings) {
   const value = field.read(settings);
-  if (typeof value === "boolean") field.input.checked = value;
-  else field.input.value = value;
+  if (typeof value === "boolean") {
+    if ("checked" in field.input) field.input.checked = value;
+  } else field.input.value = value;
   field.status.refresh();
 }
 

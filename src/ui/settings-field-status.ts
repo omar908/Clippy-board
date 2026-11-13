@@ -1,5 +1,5 @@
-/** Shared feedback and reset behavior for shortcuts, numeric fields and toggles. */
-export function bindSettingStatus(input: HTMLInputElement, label: string, defaultValue: string | boolean, onReset = () => {}, onRetry = () => {}) {
+/** Shared feedback and reset behavior for Settings controls. */
+export function bindSettingStatus(input: HTMLInputElement | HTMLSelectElement, label: string, defaultValue: string | boolean, onReset = () => {}, onRetry = () => {}) {
   const row = input.closest<HTMLElement>(".settings-row");
   if (!row) return { refresh() {}, feedback(_phase: string, _message?: string, _retryable?: boolean) {}, setEnabled(_enabled: boolean) {} };
   row.classList.add("settings-row-customizable");
@@ -29,16 +29,18 @@ export function bindSettingStatus(input: HTMLInputElement, label: string, defaul
   reset.textContent = "Reset";
   reset.setAttribute("aria-label", `Reset ${label} to default`);
   const refresh = () => {
-    const value = typeof defaultValue === "boolean" ? input.checked : input.value;
+    const value = "checked" in input && typeof defaultValue === "boolean" ? input.checked : input.value;
     const customized = value !== defaultValue;
-    const display = typeof defaultValue === "boolean" ? (defaultValue ? "On" : "Off") : defaultValue;
+    const display = typeof defaultValue === "boolean" ? (defaultValue ? "On" : "Off")
+      : ("options" in input ? Array.from(input.options).find(option => option.value === defaultValue)?.text : undefined) ?? defaultValue;
     status.textContent = `Default: ${display}${customized ? " · Customized" : ""}`;
     row.classList.toggle("settings-customized", customized);
     reset.disabled = !enabled || !customized;
   };
   reset.addEventListener("click", () => {
-    if (typeof defaultValue === "boolean") input.checked = defaultValue;
-    else input.value = defaultValue;
+    if (typeof defaultValue === "boolean") {
+      if ("checked" in input) input.checked = defaultValue;
+    } else input.value = defaultValue;
     refresh();
     onReset();
   });

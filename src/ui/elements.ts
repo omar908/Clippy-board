@@ -27,6 +27,7 @@ export function getAppElements() {
   const settingDeleteTtl = getEl("setting-delete-ttl") as HTMLInputElement;
   const settingStartOnLogin = getEl("setting-start-on-login") as HTMLInputElement;
   const settingCompactMode = getEl("setting-compact-mode") as HTMLInputElement;
+  const settingTheme = getEl("setting-theme") as HTMLSelectElement;
   const settingAutomaticUpdateChecks = getEl("setting-automatic-update-checks") as HTMLInputElement;
   const settingShowPinned = getEl("setting-show-pinned") as HTMLInputElement;
   const shortcutPinItem = getEl("shortcut-pin-item") as HTMLInputElement;
@@ -45,7 +46,7 @@ export function getAppElements() {
   const countImage = getEl("count-image") as HTMLSpanElement;
   const countFile = getEl("count-file") as HTMLSpanElement;
 
-  return { settingAutomaticUpdateChecks, settingCompactMode, settingStartOnLogin, settingShowPinned, countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsAttention, settingsStatus, settingsRetry, settingsLeave, settingsReview, settingsDiscard, countAll, countText, countImage, countFile };
+  return { settingTheme, settingAutomaticUpdateChecks, settingCompactMode, settingStartOnLogin, settingShowPinned, countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsAttention, settingsStatus, settingsRetry, settingsLeave, settingsReview, settingsDiscard, countAll, countText, countImage, countFile };
 }
 
 export type AppElements = ReturnType<typeof getAppElements>;
