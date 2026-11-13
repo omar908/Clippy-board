@@ -17,6 +17,8 @@ test("Settings supports keyboard navigation and returns focus without trapping s
   await expect(page.locator("#settings-page")).toBeVisible();
   await expect(page.locator("#settings-back-btn")).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByLabel("Start with Windows", { exact: true })).toBeFocused();
   await page.locator("#shortcut-item-restore").focus();
   await page.keyboard.press("Tab");

@@ -23,7 +23,7 @@ The version-bump workflow publishes the MSI and NSIS installers, their signature
 ## Test an upgrade
 
 1. Install the first signed, updater-enabled build from GitHub Releases. Start with the same installer format you normally use.
-2. After the next signed version is published, open **Settings → About → Check for updates** in the older build. Choose **Install and restart** and verify the version after restart. Repeat with both MSI and NSIS.
+2. After the next signed version is published, open **Settings** in the older build and select **Check for updates**. Choose **Install and restart** and verify the version after restart. Repeat with both MSI and NSIS.
 3. Check that the clipboard history and Settings preferences survive the upgrade. Turn off automatic checks and verify that the manual button still works.
 4. Test failure with a disposable signed build and a test feed. A failed download or invalid signature should leave the app running with the option to retry or open the release page.
 

@@ -7,13 +7,15 @@ export function bindUpdateControls(settingsButton: HTMLButtonElement) {
   const releaseButton = getEl("open-update-release") as HTMLButtonElement;
   const installButton = getEl("install-update") as HTMLButtonElement;
   const status = getEl("update-status");
+  const actions = getEl("update-actions");
   let release: Release | undefined;
 
   const checker = createUpdateChecker(result => {
     release = "release" in result ? result.release : undefined;
-    releaseButton.hidden = !release;
+    actions.hidden = !release;
     installButton.hidden = !release?.installable;
     installButton.disabled = result.phase === "installing";
+    installButton.textContent = result.phase === "install-error" ? "Retry" : "Install and restart";
     checkButton.disabled = result.phase === "checking" || result.phase === "installing";
     settingsButton.classList.toggle("update-available", Boolean(release));
     settingsButton.title = release ? "Settings · Update available" : "Settings";

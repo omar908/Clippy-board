@@ -830,8 +830,29 @@ body.preview-window .preview-panel {
 .settings-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
   gap: 10px;
   padding: 4px 0 12px 0;
+}
+
+.settings-update-check {
+  margin-inline-start: auto;
+}
+
+.settings-update-panel {
+  flex-shrink: 0;
+}
+
+#update-status:not(:empty),
+.settings-update-actions:not([hidden]) {
+  margin-bottom: 8px;
+}
+
+.settings-update-actions:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .settings-back-btn {
