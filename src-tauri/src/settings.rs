@@ -35,6 +35,17 @@ pub struct AppSettings {
     pub automatic_update_checks: bool,
     #[serde(default)]
     pub theme: Theme,
+    #[serde(default)]
+    pub font: AppearanceFont,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AppearanceFont {
+    OpenDyslexic,
+    #[default]
+    #[serde(other)]
+    System,
 }
 
 fn default_automatic_update_checks() -> bool {
@@ -65,6 +76,7 @@ impl Default for AppSettings {
             compact_mode: false,
             automatic_update_checks: default_automatic_update_checks(),
             theme: Theme::default(),
+            font: AppearanceFont::default(),
         }
     }
 }
@@ -81,18 +93,21 @@ mod tests {
         assert!(!settings.compact_mode);
         assert!(settings.automatic_update_checks);
         assert_eq!(settings.theme, Theme::System);
+        assert_eq!(settings.font, AppearanceFont::System);
         assert_eq!(settings.shortcuts["restore"], "Ctrl+K");
     }
 
     #[test]
-    fn compact_mode_round_trips() {
+    fn compact_mode_and_font_round_trip() {
         let settings = AppSettings {
             compact_mode: true,
+            font: AppearanceFont::OpenDyslexic,
             ..AppSettings::default()
         };
         let json = serde_json::to_string(&settings).unwrap();
         let loaded: AppSettings = serde_json::from_str(&json).unwrap();
         assert!(loaded.compact_mode);
+        assert_eq!(loaded.font, AppearanceFont::OpenDyslexic);
     }
 }
 

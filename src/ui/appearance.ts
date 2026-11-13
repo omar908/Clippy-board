@@ -1,12 +1,15 @@
 import { listen } from "@tauri-apps/api/event";
-import { getSettings, type Theme } from "../api/settings";
+import { getSettings, type AppSettings } from "../api/settings";
+
+type Appearance = Pick<AppSettings, "theme" | "font">;
 
 let stopFollowingSystem: (() => void) | undefined;
 
-export function applyTheme(theme: Theme) {
+export function applyAppearance({ theme, font }: Appearance) {
   stopFollowingSystem?.();
   stopFollowingSystem = undefined;
   const root = document.documentElement;
+  root.dataset.font = font;
   if (theme !== "system") {
     root.dataset.theme = theme;
     return;
@@ -19,13 +22,13 @@ export function applyTheme(theme: Theme) {
   stopFollowingSystem = () => scheme.removeEventListener("change", sync);
 }
 
-export async function watchPreviewTheme() {
+export async function watchPreviewAppearance() {
   let receivedChange = false;
-  const unlisten = await listen<Theme>("appearance-theme-changed", ({ payload }) => {
+  const unlisten = await listen<Appearance>("appearance-changed", ({ payload }) => {
     receivedChange = true;
-    applyTheme(payload);
+    applyAppearance(payload);
   });
   window.addEventListener("beforeunload", unlisten, { once: true });
   const settings = await getSettings();
-  if (!receivedChange) applyTheme(settings.theme);
+  if (!receivedChange) applyAppearance(settings);
 }

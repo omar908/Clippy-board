@@ -100,7 +100,9 @@ describe("application startup", () => {
     expect(runtime.invoke).not.toHaveBeenCalledWith("get_history");
     expect(runtime.events.has("clipboard-updated")).toBe(false);
     expect(document.documentElement.dataset.theme).toBe("oled");
-    runtime.events.get("appearance-theme-changed")!({ payload: "light" });
+    expect(document.documentElement.dataset.font).toBe("system");
+    runtime.events.get("appearance-changed")!({ payload: { theme: "light", font: "open-dyslexic" } });
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(document.documentElement.dataset.font).toBe("open-dyslexic");
   });
 });

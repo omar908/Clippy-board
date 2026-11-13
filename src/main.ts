@@ -13,7 +13,7 @@ import { createSelectionController } from "./ui/selection";
 import { bindKeyboardEvents } from "./ui/keyboard";
 import { bindSearchEvents } from "./ui/search";
 import { applyDensity } from "./ui/density";
-import { applyTheme, watchPreviewTheme } from "./ui/theme";
+import { applyAppearance, watchPreviewAppearance } from "./ui/appearance";
 import { bindSettingsEvents } from "./ui/settings";
 import { bindUpdateControls } from "./ui/updates";
 import { bindWindowControls } from "./ui/controls";
@@ -35,7 +35,7 @@ const history = createHistoryController(store, elements, {
   onSelected: () => selection.anchorAfterCopy(),
   onSettingsLoaded: preferences => {
     applyDensity(preferences.compact_mode);
-    applyTheme(preferences.theme);
+    applyAppearance(preferences);
     updates?.setAutomatic(preferences.automatic_update_checks);
   },
 });
@@ -55,7 +55,7 @@ const keyboard = bindKeyboardEvents(elements, commands);
 bindSearchEvents(store, elements, history);
 const settings = bindSettingsEvents(elements, shortcuts => keyboard.updateBindings(shortcuts), undefined, preferences => {
   applyDensity(preferences.compact_mode);
-  applyTheme(preferences.theme);
+  applyAppearance(preferences);
   updates?.setAutomatic(preferences.automatic_update_checks);
   store.set({ showPinnedInAll: preferences.show_pinned_in_all });
   updateCounts(); filterAndRender();
@@ -128,7 +128,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
   });
   if (label === "preview") {
-    void watchPreviewTheme().catch(error => console.error("Could not load preview theme:", error));
+    void watchPreviewAppearance().catch(error => console.error("Could not load preview appearance:", error));
     return;
   }
   updates = bindUpdateControls(elements.settingsBtn);

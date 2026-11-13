@@ -285,7 +285,11 @@ fn save_settings_cmd(
         || settings::save_settings(&app, &settings),
     )?;
     storage::set_max_history(settings.max_history);
-    let _ = app.emit_to("preview", "appearance-theme-changed", settings.theme);
+    let _ = app.emit_to(
+        "preview",
+        "appearance-changed",
+        serde_json::json!({ "theme": settings.theme, "font": settings.font }),
+    );
     Ok(settings)
 }
 
