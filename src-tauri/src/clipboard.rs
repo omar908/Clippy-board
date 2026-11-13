@@ -513,10 +513,6 @@ fn record_capture(
                     pinned: false,
                     payload,
                 };
-                crate::app_log(&format!(
-                    "Captured new clipboard item: id={}, type={:?}",
-                    item.id, item.payload
-                ));
                 history.insert(0, item.clone());
                 let max_h = crate::storage::get_max_history();
                 if history.len() > max_h {

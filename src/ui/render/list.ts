@@ -95,8 +95,8 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
       });
       historyList.appendChild(card);
     }
-    catch (e) {
-      console.error("Error rendering item:", e, item);
+    catch {
+      console.error("Error rendering clipboard item.");
     }
   });
   renderClipboardStatus(historyList, state.currentClipboardId);
