@@ -88,9 +88,7 @@ export function createHistoryController(store: Store, elements: AppElements, cal
   async function loadDeleted() {
     try {
       const res = await ports.getDeleted();
-      console.log("Loaded deleted items raw:", res);
       store.set({ deletedItems: res });
-      console.log("Loaded deleted items:", store.get().deletedItems.length, store.get().deletedItems);
       updateCounts();
     }
     catch (err) {

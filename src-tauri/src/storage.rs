@@ -105,7 +105,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
                             payload,
                         })
                     }
-                    Err(e2) => crate::app_log(&format!("storage: skipping corrupt item {}: {}", id, e2)),
+                    Err(_) => crate::app_log(&format!("storage: skipping corrupt item {}", id)),
                 }
             }
             return items;
@@ -143,7 +143,7 @@ pub fn load(conn: &Connection) -> Vec<ClipboardItem> {
                     payload,
                 })
             }
-            Err(e) => crate::app_log(&format!("storage: skipping corrupt item {}: {}", id, e)),
+            Err(_) => crate::app_log(&format!("storage: skipping corrupt item {}", id)),
         }
     }
     items
@@ -228,7 +228,7 @@ pub fn load_deleted(conn: &Connection) -> Vec<DeletedItem> {
                 deleted_at: deleted_at as u64,
                 payload,
             }),
-            Err(e) => crate::app_log(&format!("storage: skipping corrupt deleted item {}: {}", id, e)),
+            Err(_) => crate::app_log(&format!("storage: skipping corrupt deleted item {}", id)),
         }
     }
     items

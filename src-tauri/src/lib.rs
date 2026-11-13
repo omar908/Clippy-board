@@ -613,16 +613,10 @@ fn toggle_window(app: &AppHandle) {
     }
 }
 
-pub(crate) fn app_log(msg: &str) {
-    use std::io::Write;
-    // Debug builds also log to stderr so CI can see the startup sequence even
-    // when the developer-machine log path below is unavailable.
+pub(crate) fn app_log(_msg: &str) {
+    // CI captures debug diagnostics from stderr.
     #[cfg(debug_assertions)]
-    eprintln!("[clippy] {}", msg);
-    let path = "D:\\Documents\\Coding\\Rust\\clippy\\clippy.log";
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "[LOG] {}", msg);
-    }
+    eprintln!("[clippy] {}", _msg);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
