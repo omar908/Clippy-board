@@ -1049,6 +1049,15 @@ body.preview-window .preview-panel {
   width: 100px;
 }
 
+.settings-input[type="number"] {
+  /* Leave enough vertical room for both native spin buttons. */
+  min-height: 30px;
+}
+
+.settings-input[type="number"]::-webkit-inner-spin-button {
+  height: 20px;
+}
+
 .settings-btn {
   background: var(--overlay-1);
   border: 1px solid var(--border-subtle);

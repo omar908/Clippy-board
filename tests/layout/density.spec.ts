@@ -1,5 +1,34 @@
 import { test, expect, expectUnclipped } from "./helpers";
 
+for (const compact of [false, true]) {
+  test(`number arrows work at minimum width with compact mode ${compact ? "on" : "off"}`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 420 });
+    await page.goto(compact ? "/?mode=main&density-compact=1" : "/?mode=main");
+    await expect(page.locator(".history-item")).toHaveCount(2);
+    await page.keyboard.press("Control+,");
+    const density = page.getByLabel("Compact mode", { exact: true });
+    await expect(density).toBeChecked({ checked: compact });
+
+    for (const id of ["setting-max-history", "setting-delete-ttl"]) {
+      const input = page.locator(`#${id}`);
+      await expect(input).toBeEnabled();
+      await input.scrollIntoViewIfNeeded();
+      await expectUnclipped(page, `#${id}`, ".settings-content");
+      const value = Number(await input.inputValue());
+      const bounds = (await input.boundingBox())!;
+      const x = bounds.x + bounds.width - 15;
+      const centerY = bounds.y + bounds.height / 2;
+      await page.mouse.move(x, centerY - 5);
+      await page.mouse.click(x, centerY - 5);
+      await expect(input).toHaveValue(String(value + 1));
+      await page.mouse.click(x, centerY + 5);
+      await expect(input).toHaveValue(String(value));
+      await input.blur();
+      await expect(page.locator("#settings-status")).toHaveText("All changes saved.");
+    }
+  });
+}
+
 test("compact mode autosaves, survives reopening Settings and resets to default", async ({ page }) => {
   await page.goto("/?mode=main&many=1&content=long");
   await page.mouse.move(0, 0);
