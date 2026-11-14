@@ -185,7 +185,11 @@
                 <button type="button" class="settings-btn" id="create-theme" disabled>Create theme…</button>
                 <button type="button" class="settings-btn" id="edit-theme" hidden>Edit theme…</button>
                 <button type="button" class="settings-btn" id="delete-theme" hidden>Delete theme…</button>
+                <button type="button" class="settings-btn" id="import-theme" disabled>Import theme…</button>
+                <button type="button" class="settings-btn" id="export-theme" hidden>Export theme…</button>
+                <input type="file" id="theme-file" accept=".json,application/json" hidden />
               </div>
+              <p id="theme-file-status" class="settings-row-desc" role="status" hidden></p>
               <dialog id="theme-editor" aria-labelledby="theme-editor-title">
                 <form id="theme-form">
                   <h2 id="theme-editor-title">Create theme</h2>
@@ -198,6 +202,7 @@
                   <div id="theme-fields">
                     <label for="theme-name">Name</label>
                     <input id="theme-name" class="settings-input" required maxlength="40" autofocus />
+                    <p id="theme-import-note" class="settings-row-desc" hidden></p>
                     <label for="theme-base">Starting theme</label>
                     <select id="theme-base" class="settings-input">
                       <option value="dark">Dark</option>

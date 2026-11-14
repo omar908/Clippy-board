@@ -1,6 +1,7 @@
 import type { AppSettings, CustomTheme } from "../api/settings";
 import { setInteracting } from "../api/window";
 import { applyPalette, colorKeys, contrastWarnings, validColor } from "./theme-palette";
+import { availableThemeName, exportTheme, importTheme, type ThemeDraft } from "./theme-file";
 
 const presets = {
   dark: { window: "#181a20", card: "#252934", text: "#f3f4f6", accent: "#93c5fd" },
@@ -31,6 +32,11 @@ export function bindCustomThemes(
   const create = get<HTMLButtonElement>("create-theme");
   const edit = get<HTMLButtonElement>("edit-theme");
   const remove = get<HTMLButtonElement>("delete-theme");
+  const importButton = get<HTMLButtonElement>("import-theme");
+  const exportButton = get<HTMLButtonElement>("export-theme");
+  const fileInput = get<HTMLInputElement>("theme-file");
+  const fileStatus = get("theme-file-status");
+  const importNote = get("theme-import-note");
   const inputs = colorKeys.map(key => {
     const label = document.createElement("label");
     const picker = document.createElement("input");
@@ -86,7 +92,7 @@ export function bindCustomThemes(
     preview();
   }
 
-  function open(next: typeof mode) {
+  function open(next: typeof mode, imported?: ThemeDraft) {
     const current = selected();
     if (next !== "create" && !current) return;
     mode = next;
@@ -95,15 +101,21 @@ export function bindCustomThemes(
     fields.hidden = next === "delete";
     sample.hidden = next === "delete";
     deleteMessage.hidden = next !== "delete";
-    title.textContent = next === "create" ? "Create theme" : next === "edit" ? "Edit theme" : "Delete theme?";
+    title.textContent = imported ? "Import theme" : next === "create" ? "Create theme" : next === "edit" ? "Edit theme" : "Delete theme?";
+    importNote.hidden = true;
     submit.textContent = next === "delete" ? "Delete theme" : "Save and apply";
     if (next === "delete") {
       deleteMessage.textContent = `Delete “${current!.name}”? Clippy-board will return to Follow Windows.`;
     } else {
-      const activeBase = current?.base ?? document.documentElement.dataset.theme;
+      const activeBase = imported?.base ?? current?.base ?? document.documentElement.dataset.theme;
       base.value = activeBase === "light" || activeBase === "oled" ? activeBase : "dark";
-      name.value = next === "edit" ? current!.name : "";
-      setColors(current ?? presets[base.value as CustomTheme["base"]]);
+      name.value = imported ? availableThemeName(imported.name, getSettings()?.custom_themes ?? [])
+        : next === "edit" ? current!.name : "";
+      if (imported && name.value !== imported.name) {
+        importNote.textContent = "That name is already in use. You can keep the suggested name or enter another.";
+        importNote.hidden = false;
+      }
+      setColors(imported ?? current ?? presets[base.value as CustomTheme["base"]]);
       fields.scrollTop = 0;
     }
     dialog.showModal();
@@ -114,6 +126,35 @@ export function bindCustomThemes(
   create.addEventListener("click", () => open("create"));
   edit.addEventListener("click", () => open("edit"));
   remove.addEventListener("click", () => open("delete"));
+  importButton.addEventListener("click", () => {
+    fileStatus.hidden = true;
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = "";
+    if (!file) return;
+    fileStatus.hidden = true;
+    try {
+      const imported = await importTheme(file);
+      if (getSettings() && !importButton.disabled && !dialog.open) open("create", imported);
+    } catch (failure) {
+      if (!getSettings() || importButton.disabled) return;
+      fileStatus.textContent = failure instanceof Error ? failure.message : String(failure);
+      fileStatus.hidden = false;
+    }
+  });
+  exportButton.addEventListener("click", () => {
+    const theme = selected();
+    if (!theme) return;
+    const url = URL.createObjectURL(new Blob([exportTheme(theme)], { type: "application/json" }));
+    const link = document.createElement("a");
+    const filename = theme.name.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "theme";
+    link.href = url;
+    link.download = `${filename}.clippy-theme.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   base.addEventListener("change", () => setColors(presets[base.value as CustomTheme["base"]]));
   cancel.addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => { void setInteracting(false).catch(() => {}); });
@@ -131,7 +172,7 @@ export function bindCustomThemes(
       await save(settings => {
         const others = settings.custom_themes.filter(entry => entry.id !== theme.id);
         if (deleting) return { ...settings, theme: "system", custom_theme_id: null, custom_themes: others };
-        if (!theme.name || others.some(entry => entry.name.toLowerCase() === theme.name.toLowerCase())) {
+        if (!theme.name || others.some(entry => entry.name.trim().toLowerCase() === theme.name.toLowerCase())) {
           throw new Error("Enter a unique theme name.");
         }
         const custom_themes = creating ? [...others, theme]
@@ -157,9 +198,9 @@ export function bindCustomThemes(
       select.value = value;
     },
     refresh(enabled: boolean) {
-      create.disabled = !enabled;
-      edit.hidden = remove.hidden = !selected();
-      edit.disabled = remove.disabled = !enabled;
+      create.disabled = importButton.disabled = !enabled;
+      edit.hidden = remove.hidden = exportButton.hidden = !selected();
+      edit.disabled = remove.disabled = exportButton.disabled = !enabled;
     },
   };
 }

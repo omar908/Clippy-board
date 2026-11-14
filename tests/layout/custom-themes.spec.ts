@@ -1,4 +1,5 @@
 import { expect, test } from "./helpers";
+import { readFile } from "node:fs/promises";
 
 test("custom themes preview drafts, save multiple palettes, and support editing and deletion", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 420 });
@@ -49,4 +50,43 @@ test("custom themes preview drafts, save multiple palettes, and support editing 
   await expect(theme).toHaveValue("system");
   await expect(theme.locator("option", { hasText: "Midnight blue" })).toHaveCount(0);
   await expect(theme.locator("option", { hasText: "Daylight" })).toHaveCount(1);
+});
+
+test("theme files round-trip through the editor without overwriting the original", async ({ page }) => {
+  await page.goto("/?mode=main");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.keyboard.press("Control+,");
+  const editor = page.locator("#theme-editor");
+  const file = page.locator("#theme-file");
+  const palette = {
+    format: "clippy-board-theme", version: 1, name: "Night sky", base: "dark",
+    window: "#222222", card: "#333333", text: "#222222", accent: "#bbbbff",
+  };
+  const chooseFile = (content: unknown) => file.setInputFiles({
+    name: "night-sky.clippy-theme.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(content)),
+  });
+
+  await expect(page.getByRole("button", { name: "Import theme…" })).toBeEnabled();
+  await chooseFile({ ...palette, version: 2 });
+  await expect(page.locator("#theme-file-status")).toContainText("version is unsupported");
+  await expect(editor).toBeHidden();
+  await chooseFile(palette);
+  await expect(page.getByRole("dialog", { name: "Import theme" })).toBeVisible();
+  await expect(editor.getByRole("status")).toContainText("Text on the window has low contrast");
+  await editor.getByRole("button", { name: "Save and apply" }).click();
+  await expect(editor).toBeHidden();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"), page.getByRole("button", { name: "Export theme…" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("Night-sky.clippy-theme.json");
+  const exported = JSON.parse(await readFile(await download.path(), "utf8"));
+  expect(exported).toEqual(palette);
+  await chooseFile(exported);
+  await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Night sky (2)");
+  await expect(editor.getByText(/name is already in use/)).toBeVisible();
+  await editor.getByRole("button", { name: "Save and apply" }).click();
+  await expect(editor).toBeHidden();
+  const theme = page.getByRole("combobox", { name: "Theme", exact: true });
+  await expect(theme.locator("option", { hasText: "Night sky" })).toHaveCount(2);
+  await expect(theme.locator("option:checked")).toHaveText("Night sky (2)");
 });
