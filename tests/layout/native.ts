@@ -1,5 +1,5 @@
 import type { ClipboardItem, DeletedItem } from "../../src/types";
-import type { AppSettings } from "../../src/api/settings";
+import type { AppSettings, CustomTheme } from "../../src/api/settings";
 
 // Deterministic native boundary for a real browser. These tests do not model
 // OS focus, physical monitor switching, native IPC, or a second native window.
@@ -17,6 +17,8 @@ let maxHistory = 100;
 let deleteTtl = 60;
 let compactMode = params.has("density-compact");
 let theme = params.get("theme") ?? "system";
+let customThemes: CustomTheme[] = [];
+let customThemeId: string | null = null;
 let textSize = params.get("text-size") ?? "100";
 let font = params.get("font") ?? "system";
 let automaticUpdateChecks = true;
@@ -110,7 +112,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "delete_permanently_from_deleted": deleted = deleted.filter(item => item.id !== args?.id); break;
     case "get_settings":
       if (loadFailures > 0) { loadFailures--; throw new Error("Could not read settings file"); }
-      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode, automatic_update_checks: automaticUpdateChecks, theme, font, text_size: textSize }; break;
+      result = { max_history: maxHistory, delete_immediately: deleteTtl === 0, delete_ttl_seconds: deleteTtl, shortcuts: savedShortcuts, start_on_login: startupEnabled, show_pinned_in_all: showPinnedInAll, compact_mode: compactMode, automatic_update_checks: automaticUpdateChecks, theme, font, text_size: textSize, custom_themes: customThemes, custom_theme_id: customThemeId }; break;
     case "save_settings_cmd": {
       document.documentElement.dataset.settingsWrites = String(++settingsWrites);
       const fail = saveFailures > 0;
@@ -122,6 +124,8 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       showPinnedInAll = settings.show_pinned_in_all;
       compactMode = settings.compact_mode;
       theme = settings.theme;
+      customThemes = settings.custom_themes;
+      customThemeId = settings.custom_theme_id;
       font = settings.font;
       textSize = settings.text_size;
       automaticUpdateChecks = settings.automatic_update_checks;

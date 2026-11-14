@@ -35,7 +35,8 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
       allowWhenTyping: definition.scope === "settings" || definition.scope === "escape" || definition.scope === "window",
       allowInSettingsInput: definition.scope === "settings" || definition.scope === "escape",
       when: () => {
-        if (document.getElementById("update-dialog")?.hasAttribute?.("open")) return false;
+        if (document.getElementById("update-dialog")?.hasAttribute?.("open")
+          || document.getElementById("theme-editor")?.hasAttribute?.("open")) return false;
         if (definition.id === "item.copy" && active()?.id === "update-available-btn") return false;
         // Enter activates the compact preview's Back button natively.
         if (definition.id === "item.copy" && active()?.id === "preview-back") return false;

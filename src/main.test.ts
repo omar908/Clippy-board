@@ -105,5 +105,15 @@ describe("application startup", () => {
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(document.documentElement.dataset.font).toBe("open-dyslexic");
     expect(document.documentElement.dataset.textSize).toBe("130");
+    const style = { setProperty: vi.fn(), removeProperty: vi.fn() };
+    Object.defineProperty(document.documentElement, "style", { value: style });
+    runtime.events.get("appearance-changed")!({ payload: {
+      theme: "custom", font: "system", text_size: "100", custom_theme_id: "test",
+      custom_themes: [{ id: "test", name: "Midnight", base: "dark", window: "#101020",
+        card: "#202030", text: "#ffffff", accent: "#aaccff" }],
+    } });
+    expect(style.setProperty).toHaveBeenCalledWith("--bg-window", "#101020");
+    runtime.events.get("appearance-changed")!({ payload: { theme: "light", font: "system", text_size: "100" } });
+    expect(style.removeProperty).toHaveBeenCalledWith("--bg-window");
   });
 });

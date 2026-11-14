@@ -10,6 +10,7 @@ pub enum Theme {
     Light,
     Oled,
     Dark,
+    Custom,
     #[default]
     #[serde(other)]
     System,
@@ -36,9 +37,49 @@ pub struct AppSettings {
     #[serde(default)]
     pub theme: Theme,
     #[serde(default)]
+    pub custom_theme_id: Option<String>,
+    #[serde(default)]
+    pub custom_themes: Vec<CustomTheme>,
+    #[serde(default)]
     pub font: AppearanceFont,
     #[serde(default)]
     pub text_size: TextSize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomTheme {
+    pub id: String,
+    pub name: String,
+    pub base: Theme,
+    pub window: String,
+    pub card: String,
+    pub text: String,
+    pub accent: String,
+}
+
+pub fn validate_custom_themes(settings: &AppSettings) -> Result<(), String> {
+    let mut ids = std::collections::HashSet::new();
+    let mut names = std::collections::HashSet::new();
+    for theme in &settings.custom_themes {
+        if theme.id.is_empty()
+            || !ids.insert(&theme.id)
+            || theme.name.trim().is_empty()
+            || theme.name.chars().count() > 40
+            || !names.insert(theme.name.trim().to_lowercase())
+            || !matches!(theme.base, Theme::Light | Theme::Dark | Theme::Oled)
+            || [&theme.window, &theme.card, &theme.text, &theme.accent].iter().any(|color| {
+                color.len() != 7 || !color.starts_with('#') || !color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+            })
+        {
+            return Err("Each custom theme needs a unique name and valid colors.".into());
+        }
+    }
+    if settings.theme == Theme::Custom
+        && !settings.custom_theme_id.as_ref().is_some_and(|id| ids.contains(id))
+    {
+        return Err("The selected custom theme no longer exists.".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +132,8 @@ impl Default for AppSettings {
             compact_mode: false,
             automatic_update_checks: default_automatic_update_checks(),
             theme: Theme::default(),
+            custom_theme_id: None,
+            custom_themes: Vec::new(),
             font: AppearanceFont::default(),
             text_size: TextSize::default(),
         }
