@@ -12,6 +12,8 @@ export function bindUpdateControls(settingsButton: HTMLButtonElement) {
   const dialog = getEl("update-dialog") as HTMLDialogElement;
   const dialogTitle = getEl("update-dialog-title");
   const dialogStatus = getEl("update-dialog-status");
+  const progress = getEl("update-progress");
+  const dialogActions = getEl("update-dialog-actions");
   const cancelButton = getEl("cancel-update") as HTMLButtonElement;
   const confirmButton = getEl("confirm-update") as HTMLButtonElement;
   const dialogReleaseButton = getEl("update-dialog-release") as HTMLButtonElement;
@@ -32,7 +34,13 @@ export function bindUpdateControls(settingsButton: HTMLButtonElement) {
 
     switch (result.phase) {
       case "checking": status.textContent = "Checking for updates…"; break;
-      case "current": status.textContent = "You’re up to date."; break;
+      case "current": {
+        const checkedAt = new Date().toLocaleTimeString(undefined, {
+          hour: "numeric", minute: "2-digit", second: "2-digit",
+        });
+        status.textContent = `You’re up to date. (Checked at ${checkedAt})`;
+        break;
+      }
       case "available": status.textContent = `Clippy-board ${result.release.version} is available.`; break;
       case "installing": status.textContent = "Downloading and verifying the update. Clippy-board will restart after installation."; break;
       case "install-error": status.textContent = "Couldn’t install the signed update. Try again or open the release page."; break;
@@ -43,11 +51,17 @@ export function bindUpdateControls(settingsButton: HTMLButtonElement) {
       const installing = result.phase === "installing";
       dialogTitle.textContent = installing ? "Installing update" : "Update failed";
       dialogStatus.textContent = status.textContent;
+      dialogActions.hidden = installing;
+      progress.hidden = !installing;
       confirmButton.disabled = installing;
       confirmButton.textContent = installing ? "Install and restart" : "Retry";
       cancelButton.disabled = installing;
       dialogReleaseButton.hidden = installing;
       cancelButton.textContent = "Close";
+      if (installing) {
+        dialogStatus.tabIndex = -1;
+        dialogStatus.focus();
+      } else confirmButton.focus();
     } else if (requested?.version !== release?.version) {
       dialog.close();
     }
@@ -64,6 +78,8 @@ export function bindUpdateControls(settingsButton: HTMLButtonElement) {
     cancelButton.disabled = confirmButton.disabled = false;
     cancelButton.textContent = "Cancel";
     dialogReleaseButton.hidden = true;
+    dialogActions.hidden = false;
+    progress.hidden = true;
     dialog.showModal();
   }
 

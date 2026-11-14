@@ -27,12 +27,13 @@
             <button id="close-btn" class="icon-btn" title="Close (Esc)">✕</button>
           </div>
         </header>
-        <button type="button" id="update-available-btn" class="settings-btn update-available-btn" hidden>Update available</button>
+        <button type="button" id="update-available-btn" class="settings-btn" hidden>Update available</button>
 
         <dialog id="update-dialog" aria-labelledby="update-dialog-title" aria-describedby="update-dialog-status">
           <h2 id="update-dialog-title">Install update?</h2>
           <p id="update-dialog-status" role="status"></p>
-          <div class="update-dialog-actions">
+          <progress id="update-progress" aria-label="Installing update" hidden></progress>
+          <div id="update-dialog-actions" class="update-dialog-actions">
             <button type="button" id="update-dialog-release" class="settings-btn" hidden>Open release page</button>
             <button type="button" id="cancel-update" class="settings-btn" autofocus>Cancel</button>
             <button type="button" id="confirm-update" class="settings-btn">Install and restart</button>
