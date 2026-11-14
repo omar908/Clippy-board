@@ -3,7 +3,7 @@ import type { AppSettings, CustomTheme } from "../api/settings";
 import { setInteracting } from "../api/window";
 import { applyPalette, colorKeys, contrastWarnings, validColor } from "./theme-palette";
 import { availableThemeName, exportTheme, importTheme, type ThemeDraft } from "./theme-file";
-import { applyIcons, contentIcons, defaultIcons, icon } from "./theme-icons";
+import { applyIcons, contentIcons, defaultIcons, icon, iconChoices, iconRoles, type IconRole } from "./theme-icons";
 
 const presets = {
   dark: { window: "#181a20", card: "#252934", text: "#f3f4f6", accent: "#93c5fd" },
@@ -26,9 +26,40 @@ export function bindCustomThemes(
   const sample = get("theme-sample");
   const iconSample = document.createElement("div");
   iconSample.className = "theme-icon-sample";
-  iconSample.append(icon("settings"), icon("pin"), icon("delete"));
   sample.append(iconSample);
   const iconStyle = get<HTMLSelectElement>("theme-icon-style");
+  const picker = get("theme-icon-picker");
+  const roleRows = Object.entries(iconRoles).map(([key, label]) => {
+    const role = key as IconRole;
+    const row = document.createElement("div");
+    row.className = "theme-icon-row";
+    const caption = document.createElement("label");
+    caption.textContent = label;
+    const control = document.createElement("select");
+    control.className = "settings-input";
+    caption.htmlFor = control.id = `theme-icon-role-${role}`;
+    control.add(new Option("Preset default", ""));
+    for (const choice of iconChoices) control.add(new Option(choice.label, choice.id));
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "settings-btn";
+    reset.textContent = "Reset";
+    reset.setAttribute("aria-label", `Reset ${label} icon`);
+    reset.onclick = () => {
+      control.value = "";
+      const legacy = iconOverrides.find(entry => entry.type === role);
+      if (legacy) legacy.checkbox.checked = false;
+      preview();
+    };
+    control.onchange = preview;
+    row.append(caption, control, reset);
+    picker.append(row);
+    const example = document.createElement("span");
+    example.title = label;
+    example.append(icon(role));
+    if (!contentIcons.some(type => type === role)) iconSample.append(example);
+    return { role, control, reset };
+  });
   const iconOverrides = contentIcons.map((type, index) => {
     const label = document.createElement("label");
     const checkbox = document.createElement("input");
@@ -98,12 +129,18 @@ export function bindCustomThemes(
     for (const { key, hex } of inputs) palette[key] = hex.value;
     const icons = { ...defaultIcons, style: iconStyle.value === "outline" ? "outline" as const : "emoji" as const };
     for (const { type, checkbox } of iconOverrides) icons[type] = checkbox.checked;
-    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette, icons };
+    const overrides = Object.fromEntries(roleRows.filter(({ control }) => control.value)
+      .map(({ role, control }) => [role, control.value]));
+    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette,
+      icons: Object.keys(overrides).length ? { ...icons, overrides } : icons };
   }
 
   function preview() {
     const theme = draft();
     applyIcons(sample, theme.icons);
+    for (const { role, control, reset } of roleRows) {
+      reset.disabled = !control.value && !iconOverrides.some(entry => entry.type === role && entry.checkbox.checked);
+    }
     if (!colorKeys.every(key => validColor(theme[key]))) return;
     clearSample?.();
     clearSample = applyPalette(sample, theme);
@@ -144,6 +181,7 @@ export function bindCustomThemes(
       }
       const icons = (imported ?? current)?.icons ?? defaultIcons;
       iconStyle.value = icons.style;
+      for (const { role, control } of roleRows) control.value = icons.overrides?.[role] ?? "";
       for (const { type, checkbox } of iconOverrides) checkbox.checked = icons[type];
       setColors(imported ?? current ?? presets[base.value as CustomTheme["base"]]);
       fields.scrollTop = 0;

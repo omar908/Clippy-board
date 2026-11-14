@@ -4,6 +4,7 @@ export type Theme = "dark" | "light" | "system" | "oled";
 export type ThemeIcons = {
   style: "emoji" | "outline";
   text: boolean; image: boolean; file: boolean;
+  overrides?: Record<string, string>;
 };
 export type CustomTheme = {
   id: string; name: string; base: Exclude<Theme, "system">;

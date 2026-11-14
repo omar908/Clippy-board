@@ -69,6 +69,8 @@ pub struct ThemeIcons {
     pub image: bool,
     #[serde(default)]
     pub file: bool,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub overrides: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
