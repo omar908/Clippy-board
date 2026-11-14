@@ -1,3 +1,4 @@
+import { icon } from "../theme-icons";
 import type { ClipboardPayload } from "../../types";
 import type { AppFilter, DisplayItem } from "../../state/store";
 import { formatTime, formatTTL } from "../../utils/format";
@@ -34,7 +35,7 @@ export function renderPinButton(item: { pinned?: boolean }, pinBtn: HTMLButtonEl
   pinBtn.className = "item-action-btn btn-pin";
   pinBtn.title = item.pinned ? "Unpin (unlock)" : "Pin (lock)";
   pinBtn.setAttribute("aria-label", item.pinned ? "Unpin" : "Pin");
-  pinBtn.innerHTML = item.pinned ? "📌" : "📍";
+  pinBtn.replaceChildren(icon(item.pinned ? "pin" : "unpin"));
   pinBtn.onclick = (e) => {
     e.stopPropagation();
     onToggle();
@@ -57,7 +58,7 @@ export function renderActions(
     undoBtn.className = "item-action-btn btn-undo";
     undoBtn.title = "Restore to original position without copying";
     undoBtn.setAttribute("aria-label", "Undo restore");
-    undoBtn.innerHTML = "↶";
+    undoBtn.append(icon("restore"));
     undoBtn.onclick = (e) => {
       e.stopPropagation();
       onRestore();
@@ -67,13 +68,7 @@ export function renderActions(
     permDeleteBtn.className = "item-action-btn btn-delete";
     permDeleteBtn.title = "Delete permanently";
     permDeleteBtn.setAttribute("aria-label", "Delete permanently");
-    permDeleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M2.5 4.5h11" />
-      <path d="M6 4.5V3.25h4V4.5" />
-      <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
-      <path d="M6.6 7.25v4M9.4 7.25v4" />
-    </svg>`;
+    permDeleteBtn.append(icon("delete"));
     permDeleteBtn.onclick = (e) => {
       e.stopPropagation();
       onDeletePermanent();
@@ -95,13 +90,7 @@ export function renderActions(
       deleteBtn.title = "Delete from history";
       deleteBtn.setAttribute("aria-label", "Delete from history");
     }
-    deleteBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
-      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M2.5 4.5h11" />
-      <path d="M6 4.5V3.25h4V4.5" />
-      <path d="M3.75 4.5l.55 8.1A1.4 1.4 0 0 0 5.7 13.9h4.6a1.4 1.4 0 0 0 1.4-1.3l.55-8.1" />
-      <path d="M6.6 7.25v4M9.4 7.25v4" />
-    </svg>`;
+    deleteBtn.append(icon("delete"));
     deleteBtn.onclick = (e) => {
       e.stopPropagation();
       if (item.pinned) return;

@@ -5,8 +5,8 @@ export type ThemeDraft = Omit<CustomTheme, "id">;
 const format = "clippy-board-theme";
 const version = 1;
 
-export function exportTheme({ name, base, window, card, text, accent }: CustomTheme) {
-  return JSON.stringify({ format, version, name, base, window, card, text, accent }, null, 2) + "\n";
+export function exportTheme({ name, base, window, card, text, accent, icons }: CustomTheme) {
+  return JSON.stringify({ format, version, name, base, window, card, text, accent, icons }, null, 2) + "\n";
 }
 
 export async function importTheme(file: File): Promise<ThemeDraft> {
@@ -33,7 +33,16 @@ export async function importTheme(file: File): Promise<ThemeDraft> {
     if (typeof color !== "string" || !validColor(color)) throw new Error(`Invalid ${key} color in the theme file.`);
     colors[key] = color;
   }
-  return { name: name.trim(), base, ...colors };
+  const { icons } = data;
+  if (icons !== undefined && (!icons || typeof icons !== "object" || !("style" in icons)
+      || (icons.style !== "emoji" && icons.style !== "outline")
+      || !("text" in icons) || typeof icons.text !== "boolean"
+      || !("image" in icons) || typeof icons.image !== "boolean"
+      || !("file" in icons) || typeof icons.file !== "boolean")) {
+    throw new Error("Invalid icon choices in the theme file.");
+  }
+  return { name: name.trim(), base, ...colors,
+    ...(icons && { icons: icons as NonNullable<CustomTheme["icons"]> }) };
 }
 
 export function availableThemeName(name: string, themes: CustomTheme[]) {

@@ -84,6 +84,14 @@ test("theme files round-trip through the editor without overwriting the original
   await chooseFile(palette);
   await expect(page.getByRole("dialog", { name: "Import theme" })).toBeVisible();
   await expect(editor.getByRole("status")).toContainText("Text on the window has low contrast");
+  const iconStyle = editor.getByLabel("Icon style");
+  await expect(iconStyle).toHaveValue("emoji");
+  await iconStyle.selectOption("outline");
+  await editor.getByRole("checkbox", { name: "Alternate Text icon" }).check();
+  await expect(editor.locator("#theme-sample")).toHaveAttribute("data-icon-style", "outline");
+  await expect.poll(() => editor.locator('#theme-sample [data-icon="text"]').evaluate(element =>
+    getComputedStyle(element, "::before").maskImage)).toContain("data:image/svg+xml");
+  await expect(page.locator("html")).toHaveAttribute("data-icon-style", "emoji");
   await editor.getByRole("button", { name: "Save and apply" }).click();
   await expect(editor).toBeHidden();
   const exportButton = page.getByRole("button", { name: "Export theme…" });
@@ -98,13 +106,16 @@ test("theme files round-trip through the editor without overwriting the original
   await exportButton.click();
   await expect(status).toHaveText("Theme saved to C:\\Users\\Tester\\Downloads\\Night sky.clippy-theme.json");
   const exported = JSON.parse((await page.locator("html").getAttribute("data-theme-export-contents"))!);
-  expect(exported).toEqual(palette);
+  expect(exported).toEqual({ ...palette, icons: { style: "outline", text: true, image: false, file: false } });
   await chooseFile(exported);
   await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Night sky (2)");
+  await expect(iconStyle).toHaveValue("outline");
+  await expect(editor.getByRole("checkbox", { name: "Alternate Text icon" })).toBeChecked();
   await expect(editor.getByText(/name is already in use/)).toBeVisible();
   await editor.getByRole("button", { name: "Save and apply" }).click();
   await expect(editor).toBeHidden();
   const theme = page.getByRole("combobox", { name: "Theme", exact: true });
   await expect(theme.locator("option", { hasText: "Night sky" })).toHaveCount(2);
   await expect(theme.locator("option:checked")).toHaveText("Night sky (2)");
+  await expect(page.locator("html")).toHaveAttribute("data-icon-style", "outline");
 });

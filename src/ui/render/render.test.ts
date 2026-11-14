@@ -54,9 +54,9 @@ describe("extracted renderers", () => {
   it("blocks pinned deletion and routes deleted actions without selecting a card", () => {
     // Only the button API used by the renderer is needed for callback checks.
     const buttons: HTMLButtonElement[] = [];
-    vi.stubGlobal("document", { createElement: () => {
-      const button = { setAttribute: vi.fn() } as unknown as HTMLButtonElement;
-      buttons.push(button);
+    vi.stubGlobal("document", { createElement: (tag: string) => {
+      const button = { dataset: {}, setAttribute: vi.fn(), append: vi.fn(), replaceChildren: vi.fn() } as unknown as HTMLButtonElement;
+      if (tag === "button") buttons.push(button);
       return button;
     } });
     const actions = { innerHTML: "", appendChild: vi.fn() } as unknown as HTMLElement;

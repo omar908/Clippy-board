@@ -3,6 +3,7 @@ import type { AppSettings, CustomTheme } from "../api/settings";
 import { setInteracting } from "../api/window";
 import { applyPalette, colorKeys, contrastWarnings, validColor } from "./theme-palette";
 import { availableThemeName, exportTheme, importTheme, type ThemeDraft } from "./theme-file";
+import { applyIcons, contentIcons, defaultIcons, icon } from "./theme-icons";
 
 const presets = {
   dark: { window: "#181a20", card: "#252934", text: "#f3f4f6", accent: "#93c5fd" },
@@ -23,6 +24,25 @@ export function bindCustomThemes(
   const name = get<HTMLInputElement>("theme-name");
   const base = get<HTMLSelectElement>("theme-base");
   const sample = get("theme-sample");
+  const iconSample = document.createElement("div");
+  iconSample.className = "theme-icon-sample";
+  iconSample.append(icon("settings"), icon("pin"), icon("delete"));
+  sample.append(iconSample);
+  const iconStyle = get<HTMLSelectElement>("theme-icon-style");
+  const iconOverrides = contentIcons.map((type, index) => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    const caption = ["Text", "Image", "Files"][index];
+    checkbox.type = "checkbox";
+    label.append(checkbox, ` Alternate ${caption} icon`);
+    get("theme-icon-overrides").append(label);
+    const example = document.createElement("span");
+    example.append(icon(type), ` ${caption}`);
+    iconSample.append(example);
+    checkbox.addEventListener("change", preview);
+    return { type, checkbox };
+  });
+  iconStyle.addEventListener("change", preview);
   const warnings = get("theme-warnings");
   const error = get("theme-error");
   const fields = get("theme-fields");
@@ -76,11 +96,14 @@ export function bindCustomThemes(
   function draft(): CustomTheme {
     const palette = { ...presets[base.value as CustomTheme["base"]] };
     for (const { key, hex } of inputs) palette[key] = hex.value;
-    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette };
+    const icons = { ...defaultIcons, style: iconStyle.value === "outline" ? "outline" as const : "emoji" as const };
+    for (const { type, checkbox } of iconOverrides) icons[type] = checkbox.checked;
+    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette, icons };
   }
 
   function preview() {
     const theme = draft();
+    applyIcons(sample, theme.icons);
     if (!colorKeys.every(key => validColor(theme[key]))) return;
     clearSample?.();
     clearSample = applyPalette(sample, theme);
@@ -119,6 +142,9 @@ export function bindCustomThemes(
         importNote.textContent = "That name is already in use. You can keep the suggested name or enter another.";
         importNote.hidden = false;
       }
+      const icons = (imported ?? current)?.icons ?? defaultIcons;
+      iconStyle.value = icons.style;
+      for (const { type, checkbox } of iconOverrides) checkbox.checked = icons[type];
       setColors(imported ?? current ?? presets[base.value as CustomTheme["base"]]);
       fields.scrollTop = 0;
     }

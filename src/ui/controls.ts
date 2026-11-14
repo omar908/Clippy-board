@@ -1,3 +1,4 @@
+import { icon } from "./theme-icons";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppCommands } from "../app/commands";
@@ -16,11 +17,13 @@ export function bindWindowControls(store: Store, elements: AppElements, selectio
     if (rendered?.isPaused === isPaused && rendered.isPinned === isPinned) return;
     rendered = { isPaused, isPinned };
     pauseBtn.classList.toggle("active", isPaused);
-    pauseBtn.innerHTML = isPaused ? "▶️" : "⏸️";
+    pauseBtn.replaceChildren(icon(isPaused ? "resume" : "pause"));
     pauseBtn.title = isPaused ? "Resume clipboard listening" : "Pause clipboard listening";
+    pauseBtn.setAttribute("aria-label", pauseBtn.title);
     document.body.classList.toggle("paused", isPaused);
     pinBtn.classList.toggle("active", isPinned);
     pinBtn.title = isPinned ? "Pinned: Window stays open on blur" : "Unpinned: Window hides on blur";
+    pinBtn.setAttribute("aria-label", pinBtn.title);
   }
   renderState();
   const unsubscribe = store.subscribe(renderState);

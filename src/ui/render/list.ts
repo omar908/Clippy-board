@@ -1,3 +1,4 @@
+import { icon } from "../theme-icons";
 import type { AppState } from "../../state/store";
 import type { AppElements } from "../elements";
 import { createItemCard, renderItemMeta, renderTime, renderActions } from "./item";
@@ -45,13 +46,14 @@ export function renderList(elements: AppElements, getState: () => Readonly<AppSt
       const badge = document.createElement("span");
       badge.className = `item-badge badge-${type}`;
       badge.textContent = type;
+      badge.prepend(icon(type));
       const time = document.createElement("span");
       time.className = "item-time";
       renderTime(actualItem, time);
       if (actualItem.pinned) {
         const pinBadge = document.createElement("span");
         pinBadge.className = "item-pin-badge";
-        pinBadge.textContent = "📌";
+        pinBadge.append(icon("pin"));
         pinBadge.title = "Pinned (locked)";
         metaLeft.appendChild(pinBadge);
       }

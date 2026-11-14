@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClipboardItem } from "./types";
 
 class ElementPort {
+  dataset: Record<string, string> = {};
   children: ElementPort[] = [];
   className = "";
   textContent = "";
@@ -11,6 +12,7 @@ class ElementPort {
   classList = { add: (name: string) => this.classes.add(name), remove: (name: string) => this.classes.delete(name), contains: (name: string) => this.classes.has(name) };
   listeners = new Map<string, () => void>();
   append(...children: ElementPort[]) { this.children.push(...children); }
+  prepend(child: ElementPort) { this.children.unshift(child); }
   replaceChildren() { this.children = []; }
   setAttribute() {}
   addEventListener(name: string, callback: () => void) { this.listeners.set(name, callback); }
