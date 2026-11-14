@@ -274,6 +274,7 @@ fn save_settings_cmd(
     mut settings: settings::AppSettings,
     update_startup: Option<bool>,
 ) -> Result<settings::AppSettings, String> {
+    settings::validate_custom_themes(&settings)?;
     let before = startup::enabled(&app)?;
     if !update_startup.unwrap_or(false) {
         settings.start_on_login = before;
@@ -288,7 +289,10 @@ fn save_settings_cmd(
     let _ = app.emit_to(
         "preview",
         "appearance-changed",
-        serde_json::json!({ "theme": settings.theme, "font": settings.font, "text_size": settings.text_size }),
+        serde_json::json!({
+            "theme": settings.theme, "font": settings.font, "text_size": settings.text_size,
+            "custom_theme_id": settings.custom_theme_id, "custom_themes": settings.custom_themes,
+        }),
     );
     Ok(settings)
 }

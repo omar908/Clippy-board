@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type Theme = "dark" | "light" | "system" | "oled";
+export type CustomTheme = {
+  id: string; name: string; base: Exclude<Theme, "system">;
+  window: string; card: string; text: string; accent: string;
+};
 export type AppearanceFont = "system" | "open-dyslexic";
 
 export type AppSettings = {
@@ -12,7 +16,9 @@ export type AppSettings = {
   show_pinned_in_all: boolean;
   compact_mode: boolean;
   automatic_update_checks: boolean;
-  theme: Theme;
+  theme: Theme | "custom";
+  custom_theme_id: string | null;
+  custom_themes: CustomTheme[];
   font: AppearanceFont;
   text_size: "85" | "100" | "115" | "130";
 };
@@ -21,6 +27,7 @@ export const defaultSettings: AppSettings = {
   max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
   shortcuts: {}, start_on_login: false, show_pinned_in_all: true, compact_mode: false,
   automatic_update_checks: true, theme: "system", font: "system", text_size: "100",
+  custom_theme_id: null, custom_themes: [],
 };
 
 export async function getSettings() {

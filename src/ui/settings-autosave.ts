@@ -35,9 +35,10 @@ export class SettingsAutosave<T> {
     void this.flush();
   }
 
-  discard() {
+  discard(key?: string) {
     if (this.busy) return;
-    this.edits.clear();
+    if (key === undefined) this.edits.clear();
+    else this.edits.delete(key);
     this.ports.changed();
   }
 

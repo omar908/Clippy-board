@@ -181,6 +181,40 @@
                   <option value="oled">OLED black</option>
                 </select>
               </div>
+              <div class="theme-actions">
+                <button type="button" class="settings-btn" id="create-theme" disabled>Create theme…</button>
+                <button type="button" class="settings-btn" id="edit-theme" hidden>Edit theme…</button>
+                <button type="button" class="settings-btn" id="delete-theme" hidden>Delete theme…</button>
+              </div>
+              <dialog id="theme-editor" aria-labelledby="theme-editor-title">
+                <form id="theme-form">
+                  <h2 id="theme-editor-title">Create theme</h2>
+                  <div id="theme-sample" class="theme-sample" aria-label="Theme preview">
+                    <strong>History</strong>
+                    <div class="theme-sample-card">Copied text</div>
+                    <div class="theme-sample-card theme-sample-selected">Selected item</div>
+                    <p>Preview of your clipboard text</p>
+                  </div>
+                  <div id="theme-fields">
+                    <label for="theme-name">Name</label>
+                    <input id="theme-name" class="settings-input" required maxlength="40" autofocus />
+                    <label for="theme-base">Starting theme</label>
+                    <select id="theme-base" class="settings-input">
+                      <option value="dark">Dark</option>
+                      <option value="light">Light</option>
+                      <option value="oled">OLED black</option>
+                    </select>
+                    <div id="theme-colors"></div>
+                    <ul id="theme-warnings" role="status"></ul>
+                  </div>
+                  <p id="theme-delete-message" hidden></p>
+                  <p id="theme-error" role="alert"></p>
+                  <div class="theme-actions">
+                    <button type="button" class="settings-btn" id="cancel-theme">Cancel</button>
+                    <button type="submit" class="settings-btn" id="save-theme">Save and apply</button>
+                  </div>
+                </form>
+              </dialog>
               <div class="settings-row">
                 <label class="settings-row-label" for="setting-font">Font</label>
                 <select id="setting-font" class="settings-input" disabled>
@@ -201,7 +235,7 @@
             <div class="settings-section">
               <div class="settings-section-title">About</div>
               <div class="settings-about">
-                <div>Clippy-board v0.3.6</div>
+                <div>Clippy-board v0.3.7</div>
                 <div class="settings-about-sub">Clipboard Manager</div>
               </div>
               <div class="settings-row">

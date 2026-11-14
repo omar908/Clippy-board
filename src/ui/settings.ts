@@ -6,6 +6,7 @@ import { validateShortcutSettings } from "../app/shortcut-definitions";
 import { normalizeShortcut } from "../shortcut-combo";
 import { SettingsAutosave, errorMessage } from "./settings-autosave";
 import { createSettingsFields, fieldValue, renderField, numberValue, type SettingField } from "./settings-fields";
+import { bindCustomThemes } from "./custom-themes";
 
 export function bindSettingsEvents(elements: AppElements,
   onShortcutsSaved: (shortcuts: Record<string, string>) => void = () => {},
@@ -26,6 +27,17 @@ export function bindSettingsEvents(elements: AppElements,
   let leaveAction: (() => void | Promise<void>) | undefined;
   const changedFields = new Set<SettingField>();
   const fields = createSettingsFields(elements, edit);
+  const customThemes = bindCustomThemes(elements.settingTheme, () => queue?.confirmed, async apply => {
+    const current = queue;
+    if (!loaded || !current) throw new Error("Settings are unavailable.");
+    current.edit("custom_themes", apply);
+    await current.flush();
+    const state = current.state("custom_themes");
+    if (state?.phase === "error") {
+      current.discard("custom_themes");
+      throw new Error(state.message);
+    }
+  });
 
   function refresh() {
     const attention = fields.filter(field => changedFields.has(field) && queue?.state(field.key)?.phase === "error");
@@ -42,8 +54,10 @@ export function bindSettingsEvents(elements: AppElements,
       field.status.feedback(state?.phase ?? "idle", state?.message, state?.retryable);
     }
     shortcutsReset.disabled = !loaded;
+    customThemes?.refresh(loaded && !queue?.busy);
   }
   function syncConfirmed(settings: AppSettings) {
+    customThemes?.render(settings);
     for (const field of fields) {
       const phase = queue?.state(field.key)?.phase;
       if (!phase || phase === "idle" || phase === "saved") renderField(field, settings);
@@ -72,6 +86,12 @@ export function bindSettingsEvents(elements: AppElements,
         return { ...saved, shortcuts };
       }
       if (field.key === "max_history") return { ...saved, max_history: numberValue(String(value), field.label, 1, 10000) };
+      if (field.key === "theme") {
+        const selection = String(value);
+        return selection.startsWith("custom:")
+          ? { ...saved, theme: "custom", custom_theme_id: selection.slice(7) }
+          : { ...saved, theme: selection as AppSettings["theme"], custom_theme_id: null };
+      }
       if (field.key === "delete_ttl_seconds") {
         const ttl = numberValue(String(value), field.label, 0, 86400);
         return { ...saved, delete_ttl_seconds: ttl, delete_immediately: ttl === 0 };
@@ -128,11 +148,12 @@ export function bindSettingsEvents(elements: AppElements,
         save: async (candidate, key) => {
           await api.setInteracting(true);
           try { return await api.saveSettings(candidate, key === "start_on_login"); }
-          finally { await api.setInteracting(false).catch(() => {}); }
+          finally { if (!customThemes?.isOpen()) await api.setInteracting(false).catch(() => {}); }
         },
         changed: refresh,
         saved: syncConfirmed,
       });
+      customThemes?.render(settings);
       fields.forEach(field => renderField(field, settings));
       loaded = true; refresh();
     } catch (error) {

@@ -59,6 +59,7 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
   ] as const) {
     const value = defaultSettings[key];
     add(input, label, key, typeof value === "boolean" ? value : String(value), settings => {
+      if (key === "theme") return themeSelection(settings);
       const value = settings[key]; return typeof value === "boolean" ? value : String(value);
     });
   }
@@ -85,6 +86,10 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
 
 export function fieldValue(field: SettingField) {
   return "checked" in field.input && typeof field.defaultValue === "boolean" ? field.input.checked : field.input.value;
+}
+
+export function themeSelection(settings: AppSettings) {
+  return settings.theme === "custom" ? `custom:${settings.custom_theme_id}` : settings.theme;
 }
 
 export function renderField(field: SettingField, settings: AppSettings) {
