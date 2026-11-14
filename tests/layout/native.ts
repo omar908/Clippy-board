@@ -160,6 +160,9 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     case "set_pinned": result = args?.pinned; break;
     case "set_listening_paused": result = args?.paused; break;
+    case "open_emoji_picker":
+      document.documentElement.dataset.emojiPickerTarget = document.activeElement?.id;
+      break;
     case "set_interacting":
       document.documentElement.dataset.interacting = String(args?.interacting);
       result = args?.interacting;

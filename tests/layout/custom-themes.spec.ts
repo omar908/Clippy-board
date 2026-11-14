@@ -12,6 +12,13 @@ test("custom themes preview drafts, save multiple palettes, and support editing 
   const sample = editor.locator("#theme-sample");
   const surface = page.locator(".clippy-popup");
   await create.click();
+  const minimumWidth = (await editor.boundingBox())!.width;
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 760, height: 640 });
+  expect((await editor.boundingBox())!.width).toBeGreaterThan(minimumWidth + 200);
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await expect(editor.getByRole("button", { name: "Save and apply" })).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 360, height: 420 });
   await windowColor.fill("#f3f4f6");
   await expect(sample).toHaveCSS("background-color", "rgb(243, 244, 246)");
   await expect(editor.getByRole("status")).toContainText("Text on the window has low contrast");
@@ -88,9 +95,27 @@ test("theme files round-trip through the editor without overwriting the original
   await expect(iconStyle).toHaveValue("emoji");
   await iconStyle.selectOption("outline");
   await editor.getByRole("checkbox", { name: "Alternate Text icon" }).check();
+  await editor.getByText("Customize icons", { exact: true }).click();
+  const settingsIcon = editor.locator("#theme-icon-role-settings");
+  await settingsIcon.click();
+  const gallery = editor.getByRole("group", { name: "Choose Settings icon" });
+  await expect(gallery.getByRole("button", { name: / · (Emoji|Outline)$/ })).toHaveCount(30);
+  await gallery.getByRole("button", { name: "Folder · Emoji", exact: true }).click();
+  const imageIcon = editor.locator("#theme-icon-role-image");
+  await imageIcon.click();
+  await editor.getByRole("button", { name: "Open emoji picker" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-emoji-picker-target", "theme-custom-emoji");
+  const emoji = editor.getByLabel("Custom emoji", { exact: true });
+  await emoji.fill("👩🏽‍💻");
+  await expect(imageIcon).toContainText("👩🏽‍💻");
+  await expect.poll(() => editor.locator('#theme-sample [data-icon="image"]').evaluate(element =>
+    getComputedStyle(element, "::before").content)).toContain("👩🏽‍💻");
+  const sampleSettingsIcon = editor.locator('#theme-sample [data-icon="settings"]');
+  await expect.poll(() => sampleSettingsIcon.evaluate(element =>
+    getComputedStyle(element, "::before").content)).toContain("📁");
   await expect(editor.locator("#theme-sample")).toHaveAttribute("data-icon-style", "outline");
   await expect.poll(() => editor.locator('#theme-sample [data-icon="text"]').evaluate(element =>
-    getComputedStyle(element, "::before").maskImage)).toContain("data:image/svg+xml");
+    getComputedStyle(element, "::after").maskImage)).toContain("data:image/svg+xml");
   await expect(page.locator("html")).toHaveAttribute("data-icon-style", "emoji");
   await editor.getByRole("button", { name: "Save and apply" }).click();
   await expect(editor).toBeHidden();
@@ -106,10 +131,15 @@ test("theme files round-trip through the editor without overwriting the original
   await exportButton.click();
   await expect(status).toHaveText("Theme saved to C:\\Users\\Tester\\Downloads\\Night sky.clippy-theme.json");
   const exported = JSON.parse((await page.locator("html").getAttribute("data-theme-export-contents"))!);
-  expect(exported).toEqual({ ...palette, icons: { style: "outline", text: true, image: false, file: false } });
+  expect(exported).toEqual({ ...palette, icons: {
+    style: "outline", text: true, image: false, file: false,
+    overrides: { settings: "emoji:file-alt", image: "custom:👩🏽‍💻" },
+  } });
   await chooseFile(exported);
   await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Night sky (2)");
   await expect(iconStyle).toHaveValue("outline");
+  await expect(settingsIcon).toHaveText("Folder · Emoji");
+  await expect(imageIcon).toContainText("👩🏽‍💻");
   await expect(editor.getByRole("checkbox", { name: "Alternate Text icon" })).toBeChecked();
   await expect(editor.getByText(/name is already in use/)).toBeVisible();
   await editor.getByRole("button", { name: "Save and apply" }).click();
@@ -118,4 +148,17 @@ test("theme files round-trip through the editor without overwriting the original
   await expect(theme.locator("option", { hasText: "Night sky" })).toHaveCount(2);
   await expect(theme.locator("option:checked")).toHaveText("Night sky (2)");
   await expect(page.locator("html")).toHaveAttribute("data-icon-style", "outline");
+  await expect.poll(() => page.locator('#settings-btn [data-icon]').evaluate(element =>
+    getComputedStyle(element, "::before").content)).toContain("📁");
+  await page.getByRole("button", { name: "Edit theme…" }).click();
+  const reset = editor.getByRole("button", { name: "Reset Settings icon" });
+  if (!(await reset.isVisible())) await editor.getByText("Customize icons", { exact: true }).click();
+  await reset.click();
+  await expect(settingsIcon).toHaveText("Preset default");
+  await editor.getByRole("button", { name: "Reset Image icon" }).click();
+  await expect(imageIcon).toHaveText("Preset default");
+  await editor.getByRole("button", { name: "Save and apply" }).click();
+  await expect(editor).toBeHidden();
+  await expect.poll(() => page.locator('#settings-btn [data-icon]').evaluate(element =>
+    getComputedStyle(element, "::after").display)).toBe("inline-block");
 });

@@ -3,7 +3,7 @@ import type { AppSettings, CustomTheme } from "../api/settings";
 import { setInteracting } from "../api/window";
 import { applyPalette, colorKeys, contrastWarnings, validColor } from "./theme-palette";
 import { availableThemeName, exportTheme, importTheme, type ThemeDraft } from "./theme-file";
-import { applyIcons, contentIcons, defaultIcons, icon } from "./theme-icons";
+import { applyIcons, contentIcons, customEmoji, customEmojiPrefix, defaultIcons, icon, iconChoices, iconRoles, type IconRole } from "./theme-icons";
 
 const presets = {
   dark: { window: "#181a20", card: "#252934", text: "#f3f4f6", accent: "#93c5fd" },
@@ -26,9 +26,128 @@ export function bindCustomThemes(
   const sample = get("theme-sample");
   const iconSample = document.createElement("div");
   iconSample.className = "theme-icon-sample";
-  iconSample.append(icon("settings"), icon("pin"), icon("delete"));
   sample.append(iconSample);
   const iconStyle = get<HTMLSelectElement>("theme-icon-style");
+  const picker = get("theme-icon-picker");
+  const gallery = document.createElement("div");
+  gallery.className = "theme-icon-gallery";
+  gallery.hidden = true;
+  gallery.setAttribute("role", "group");
+  let closeGallery = () => {};
+  const roleRows = Object.entries(iconRoles).map(([key, label]) => {
+    const role = key as IconRole;
+    const row = document.createElement("div");
+    row.className = "theme-icon-row";
+    const caption = document.createElement("span");
+    caption.textContent = label;
+    const control = document.createElement("button");
+    control.type = "button";
+    control.className = "settings-btn theme-icon-choice";
+    control.id = `theme-icon-role-${role}`;
+    control.setAttribute("aria-expanded", "false");
+    control.setAttribute("aria-controls", "theme-icon-gallery");
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "settings-btn";
+    reset.textContent = "Reset";
+    reset.setAttribute("aria-label", `Reset ${label} icon`);
+    reset.onclick = () => {
+      if (control.getAttribute("aria-expanded") === "true") closeGallery();
+      control.value = "";
+      const legacy = iconOverrides.find(entry => entry.type === role);
+      if (legacy) legacy.checkbox.checked = false;
+      preview();
+    };
+    control.onclick = () => {
+      const wasOpen = control.getAttribute("aria-expanded") === "true";
+      closeGallery();
+      if (wasOpen) return;
+      control.setAttribute("aria-expanded", "true");
+      gallery.id = "theme-icon-gallery";
+      gallery.setAttribute("aria-label", `Choose ${label} icon`);
+      gallery.replaceChildren(...iconChoices.map(choice => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "settings-btn";
+        button.title = choice.label;
+        button.setAttribute("aria-label", choice.label);
+        button.setAttribute("aria-pressed", String(control.value === choice.id));
+        button.append(iconSwatch(choice.id));
+        button.onclick = () => {
+          control.value = choice.id;
+          closeGallery();
+          preview();
+          control.focus();
+        };
+        return button;
+      }));
+      const emojiField = document.createElement("input");
+      emojiField.type = "text";
+      emojiField.className = "settings-input";
+      emojiField.maxLength = 64;
+      emojiField.id = "theme-custom-emoji";
+      emojiField.value = customEmoji(control.value) ?? "";
+      const emojiLabel = document.createElement("label");
+      emojiLabel.htmlFor = emojiField.id;
+      emojiLabel.textContent = "Custom emoji";
+      const hint = document.createElement("p");
+      hint.className = "settings-row-desc";
+      hint.setAttribute("role", "status");
+      hint.textContent = "Paste one emoji or press Win + .";
+      const windowsPicker = document.createElement("button");
+      windowsPicker.type = "button";
+      windowsPicker.className = "settings-btn";
+      windowsPicker.textContent = "Open emoji picker";
+      windowsPicker.onclick = () => {
+        emojiField.focus();
+        emojiField.select();
+        void invoke("open_emoji_picker").catch(() => {
+          hint.textContent = "Press Win + . to open the Windows emoji picker.";
+        });
+      };
+      emojiField.oninput = () => {
+        const choice = customEmojiPrefix + emojiField.value.trim();
+        const valid = !!customEmoji(choice);
+        hint.textContent = valid ? "" : "Enter one emoji, or press Win + .";
+        if (valid || (!emojiField.value && customEmoji(control.value))) {
+          control.value = valid ? choice : "";
+          preview();
+        }
+      };
+      const customField = document.createElement("div");
+      customField.className = "theme-custom-emoji";
+      customField.append(emojiLabel, emojiField, windowsPicker, hint);
+      gallery.append(customField);
+      row.after(gallery);
+      gallery.hidden = false;
+      closeGallery = () => {
+        gallery.hidden = true;
+        control.setAttribute("aria-expanded", "false");
+      };
+    };
+    row.append(caption, control, reset);
+    picker.append(row);
+    const example = document.createElement("span");
+    example.title = label;
+    example.append(icon(role));
+    if (!contentIcons.some(type => type === role)) iconSample.append(example);
+    return { role, control, reset };
+  });
+  function iconSwatch(choice: string) {
+    const [style, glyph] = choice.split(":");
+    const swatch = document.createElement("span");
+    swatch.setAttribute("aria-hidden", "true");
+    const emoji = customEmoji(choice);
+    if (emoji) {
+      swatch.className = "theme-icon-swatch";
+      swatch.textContent = emoji;
+      return swatch;
+    }
+    swatch.className = `theme-icon-swatch ${style}`;
+    swatch.style.setProperty("--swatch-emoji", `var(--glyph-${glyph}-emoji)`);
+    swatch.style.setProperty("--swatch-outline", `var(--glyph-${glyph}-outline)`);
+    return swatch;
+  }
   const iconOverrides = contentIcons.map((type, index) => {
     const label = document.createElement("label");
     const checkbox = document.createElement("input");
@@ -98,12 +217,26 @@ export function bindCustomThemes(
     for (const { key, hex } of inputs) palette[key] = hex.value;
     const icons = { ...defaultIcons, style: iconStyle.value === "outline" ? "outline" as const : "emoji" as const };
     for (const { type, checkbox } of iconOverrides) icons[type] = checkbox.checked;
-    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette, icons };
+    const overrides = Object.fromEntries(roleRows.filter(({ control }) => control.value)
+      .map(({ role, control }) => [role, control.value]));
+    return { id, name: name.value.trim(), base: base.value as CustomTheme["base"], ...palette,
+      icons: Object.keys(overrides).length ? { ...icons, overrides } : icons };
   }
 
   function preview() {
     const theme = draft();
     applyIcons(sample, theme.icons);
+    for (const { role, control, reset } of roleRows) {
+      const alternate = iconOverrides.some(entry => entry.type === role && entry.checkbox.checked);
+      const choice = iconChoices.find(entry => entry.id === control.value);
+      control.setAttribute("aria-label", `Choose ${iconRoles[role]} icon`);
+      const emoji = customEmoji(control.value);
+      const description = emoji ? "Custom emoji" : choice?.label ?? (alternate ? "Alternate" : "Preset default");
+      control.title = description;
+      control.replaceChildren(iconSwatch(emoji ? control.value : choice?.id ??
+        `${theme.icons?.style}:${role}${alternate ? "-alt" : ""}`), description);
+      reset.disabled = !control.value && !alternate;
+    }
     if (!colorKeys.every(key => validColor(theme[key]))) return;
     clearSample?.();
     clearSample = applyPalette(sample, theme);
@@ -120,6 +253,7 @@ export function bindCustomThemes(
   }
 
   function open(next: typeof mode, imported?: ThemeDraft) {
+    closeGallery();
     const current = selected();
     if (next !== "create" && !current) return;
     mode = next;
@@ -144,6 +278,7 @@ export function bindCustomThemes(
       }
       const icons = (imported ?? current)?.icons ?? defaultIcons;
       iconStyle.value = icons.style;
+      for (const { role, control } of roleRows) control.value = icons.overrides?.[role] ?? "";
       for (const { type, checkbox } of iconOverrides) checkbox.checked = icons[type];
       setColors(imported ?? current ?? presets[base.value as CustomTheme["base"]]);
       fields.scrollTop = 0;
