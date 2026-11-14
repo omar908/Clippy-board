@@ -1,6 +1,6 @@
 import type { CustomTheme } from "../api/settings";
 import { colorKeys, validColor } from "./theme-palette";
-import { iconChoices, iconRoles } from "./theme-icons";
+import { validIconChoice, iconRoles } from "./theme-icons";
 
 export type ThemeDraft = Omit<CustomTheme, "id">;
 const format = "clippy-board-theme";
@@ -48,7 +48,7 @@ export async function importTheme(file: File): Promise<ThemeDraft> {
       throw new Error("Invalid icon overrides in the theme file.");
     }
     settings.overrides = Object.fromEntries(Object.entries(settings.overrides).filter(([role, choice]) =>
-      Object.prototype.hasOwnProperty.call(iconRoles, role) && iconChoices.some(entry => entry.id === choice)));
+      Object.prototype.hasOwnProperty.call(iconRoles, role) && validIconChoice(choice)));
   }
   return { name: name.trim(), base, ...colors, ...(settings && { icons: settings }) };
 }

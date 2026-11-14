@@ -1525,4 +1525,25 @@ body.keyboard-nav * {
 }
 .theme-icon-sample { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .theme-icon-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 5px; align-items: center; margin-block: 5px; }
-.theme-icon-row select { width: 100%; }
+#theme-icon-overrides { display: grid; gap: 5px; }
+.theme-icon-choice { display: flex; align-items: center; gap: 6px; text-align: start; overflow-wrap: anywhere; }
+.theme-icon-gallery:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 4px;
+  margin-block: 6px;
+}
+.theme-icon-gallery button { min-height: 34px; padding: 4px; font-size: 16px; }
+.theme-icon-gallery button[aria-pressed="true"] { border-color: var(--border-active); background: var(--accent-soft); }
+.theme-icon-swatch { flex: none; }
+.theme-custom-emoji { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.theme-custom-emoji p { flex-basis: 100%; }
+.theme-icon-swatch.emoji::before { content: var(--swatch-emoji); }
+.theme-icon-swatch.outline {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  mask: var(--swatch-outline) center / contain no-repeat;
+}

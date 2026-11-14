@@ -333,6 +333,42 @@ async fn save_theme_file(
 }
 
 #[tauri::command]
+fn open_emoji_picker(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" || !window.is_focused().unwrap_or(false) {
+        return Err("Focus the main window to open the emoji picker.".into());
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_LWIN,
+            VK_OEM_PERIOD,
+        };
+        let key = |code, flags| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT { wVk: code, dwFlags: flags, ..Default::default() },
+            },
+        };
+        let inputs = [
+            key(VK_LWIN, 0),
+            key(VK_OEM_PERIOD, 0),
+            key(VK_OEM_PERIOD, KEYEVENTF_KEYUP),
+            key(VK_LWIN, KEYEVENTF_KEYUP),
+        ];
+        let size = std::mem::size_of::<INPUT>() as i32;
+        let sent = unsafe { SendInput(inputs.len() as u32, inputs.as_ptr(), size) };
+        if sent == inputs.len() as u32 {
+            return Ok(());
+        }
+        if sent == 1 || sent == 2 {
+            let releases = &inputs[if sent == 1 { 3 } else { 2 }..];
+            unsafe { SendInput(releases.len() as u32, releases.as_ptr(), size) };
+        }
+    }
+    Err("Could not open the emoji picker. Press Win + . instead.".into())
+}
+
+#[tauri::command]
 fn set_interacting(interacting: bool) -> bool {
     USER_INTERACTING.store(interacting, Ordering::SeqCst);
     interacting
@@ -943,6 +979,7 @@ pub fn run() {
             updates::signed_update_available,
             updates::install_signed_update,
             set_interacting,
+            open_emoji_picker,
             save_theme_file,
             is_pointer_held,
             preview_show,

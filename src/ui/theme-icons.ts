@@ -13,6 +13,20 @@ export const iconChoices = Object.entries({
   id: `${style}:${id}`, label: `${label} · ${style === "emoji" ? "Emoji" : "Outline"}`,
 })));
 const applied = new WeakMap<HTMLElement, string[]>();
+export const customEmojiPrefix = "custom:";
+
+export function customEmoji(choice: string) {
+  if (!choice.startsWith(customEmojiPrefix)) return undefined;
+  const value = choice.slice(customEmojiPrefix.length);
+  if (!value || value.length > 64 || !/^(?:[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\u200d\ufe0f\u20e3#*0-9\u{e0020}-\u{e007f}])+$/u.test(value)) return undefined;
+  if (!/[\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(value)) return undefined;
+  const segments = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value);
+  return Array.from(segments).length === 1 ? value : undefined;
+}
+
+export function validIconChoice(choice: unknown) {
+  return typeof choice === "string" && (iconChoices.some(entry => entry.id === choice) || !!customEmoji(choice));
+}
 export const defaultIcons: ThemeIcons = { style: "emoji", text: false, image: false, file: false };
 
 export function applyIcons(element: HTMLElement, icons = defaultIcons) {
@@ -23,10 +37,13 @@ export function applyIcons(element: HTMLElement, icons = defaultIcons) {
   for (const property of applied.get(element) ?? []) element.style.removeProperty(property);
   const properties: string[] = [];
   for (const [role, choice] of Object.entries(icons.overrides ?? {})) {
-    if (!Object.prototype.hasOwnProperty.call(iconRoles, role) || !iconChoices.some(entry => entry.id === choice)) continue;
+    if (!Object.prototype.hasOwnProperty.call(iconRoles, role) || !validIconChoice(choice)) continue;
     const [style, glyph] = choice.split(":");
+    const emoji = customEmoji(choice);
     const values = {
-      [`--icon-${role}-emoji`]: style === "emoji" ? `var(--glyph-${glyph}-emoji)` : '""',
+      [`--icon-${role}-emoji`]: emoji
+        ? '"' + Array.from(emoji, char => "\\" + char.codePointAt(0)!.toString(16) + " ").join("") + '"'
+        : style === "emoji" ? `var(--glyph-${glyph}-emoji)` : '""',
       [`--icon-${role}-outline`]: style === "outline" ? `var(--glyph-${glyph}-outline)` : "none",
       [`--icon-${role}-mask-display`]: style === "outline" ? "inline-block" : "none",
       [`--icon-${role}-visibility`]: "inline",
