@@ -159,7 +159,18 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
       break;
     case "set_pinned": result = args?.pinned; break;
     case "set_listening_paused": result = args?.paused; break;
-    case "set_interacting": result = args?.interacting; break;
+    case "set_interacting":
+      document.documentElement.dataset.interacting = String(args?.interacting);
+      result = args?.interacting;
+      break;
+    case "save_theme_file": {
+      const root = document.documentElement;
+      if (root.dataset.themeExportOutcome === "cancel") { result = null; break; }
+      if (root.dataset.themeExportOutcome === "error") throw new Error("Access denied.");
+      root.dataset.themeExportContents = String(args?.contents);
+      result = `C:\\Users\\Tester\\Downloads\\${args?.filename}`;
+      break;
+    }
     case "preview_hide": case "preview_show": case "preview_update": case "preview_position": case "preview_set_size":
     case "hide_window": document.documentElement.dataset.hideCount = String(++hideCount); break;
     case "preview_set_interactive": case "purge_expired_deleted": case "show_window": break;
