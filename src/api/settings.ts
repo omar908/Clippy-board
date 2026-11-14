@@ -1,9 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type Theme = "dark" | "light" | "system" | "oled";
+export type ThemeIcons = {
+  style: "emoji" | "outline";
+  text: boolean; image: boolean; file: boolean;
+};
 export type CustomTheme = {
   id: string; name: string; base: Exclude<Theme, "system">;
   window: string; card: string; text: string; accent: string;
+  icons?: ThemeIcons;
 };
 export type AppearanceFont = "system" | "open-dyslexic";
 

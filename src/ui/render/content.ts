@@ -1,3 +1,4 @@
+import { icon } from "../theme-icons";
 import type { TextPayload, ImagePayload, FilePayload } from "../../types";
 
 export function renderTextContent(payload: TextPayload, contentEl: HTMLElement) {
@@ -20,13 +21,12 @@ export function renderFileContent(payload: FilePayload, contentEl: HTMLElement) 
   (payload.paths || []).slice(0, 3).forEach((p: string) => {
     const fileRow = document.createElement("div");
     fileRow.className = "file-row";
-    const icon = document.createElement("span");
-    icon.className = "file-icon";
-    icon.textContent = "📄";
+    const fileIcon = icon("file");
+    fileIcon.className = "file-icon";
     const pathSpan = document.createElement("span");
     pathSpan.className = "file-path";
     pathSpan.textContent = p;
-    fileRow.appendChild(icon);
+    fileRow.appendChild(fileIcon);
     fileRow.appendChild(pathSpan);
     contentEl.appendChild(fileRow);
   });

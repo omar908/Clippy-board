@@ -1,3 +1,4 @@
+import { icon } from "../ui/theme-icons";
 import type { ClipboardItem } from "../types";
 
 const TEXT_CHAR_CAP = 100_000;
@@ -10,6 +11,7 @@ export function renderPreviewContent(header: HTMLElement, body: HTMLElement, ite
   const badge = document.createElement("span");
   badge.className = `item-badge badge-${item.type}`;
   badge.textContent = item.type;
+  badge.prepend(icon(item.type));
 
   const time = document.createElement("span");
   time.textContent = new Date(item.timestamp).toLocaleString();
@@ -110,14 +112,13 @@ export function renderPreviewContent(header: HTMLElement, body: HTMLElement, ite
       const row = document.createElement("div");
       row.className = "preview-file-row";
 
-      const icon = document.createElement("span");
-      icon.className = "preview-file-icon";
-      icon.textContent = "\u{1F4C4}"; // page facing up
+      const fileIcon = icon("file");
+      fileIcon.className = "preview-file-icon";
 
       const text = document.createElement("span");
       text.textContent = path;
 
-      row.append(icon, text);
+      row.append(fileIcon, text);
       list.append(row);
     }
     body.append(list);

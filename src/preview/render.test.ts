@@ -3,6 +3,8 @@ import { renderPreviewContent } from "./render";
 import { textItem } from "./test-support";
 
 class ElementPort {
+  dataset: Record<string, string> = {};
+  setAttribute() {}
   children: ElementPort[] = [];
   textContent = "";
   className = "";
@@ -16,6 +18,7 @@ class ElementPort {
   } };
   listeners = new Map<string, (event: MouseEvent) => void>();
   append(...children: ElementPort[]) { this.children.push(...children); }
+  prepend(child: ElementPort) { this.children.unshift(child); }
   replaceChildren() { this.children = []; }
   addEventListener(name: string, callback: (event: MouseEvent) => void) { this.listeners.set(name, callback); }
 }

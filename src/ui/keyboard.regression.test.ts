@@ -77,6 +77,7 @@ class ElementPort {
   setAttribute(_name: string, _value: string) {}
   closest(_selector: string) { return this.parentElement; }
   append(...children: ElementPort[]) { children.forEach(child => { child.parentElement = this; }); }
+  replaceChildren(...children: ElementPort[]) { this.append(...children); }
   appendChild(child: ElementPort) { child.parentElement = this; return child; }
 }
 

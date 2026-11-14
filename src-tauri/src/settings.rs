@@ -55,6 +55,29 @@ pub struct CustomTheme {
     pub card: String,
     pub text: String,
     pub accent: String,
+    #[serde(default)]
+    pub icons: ThemeIcons,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ThemeIcons {
+    #[serde(default)]
+    pub style: IconStyle,
+    #[serde(default)]
+    pub text: bool,
+    #[serde(default)]
+    pub image: bool,
+    #[serde(default)]
+    pub file: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IconStyle {
+    Outline,
+    #[default]
+    #[serde(other)]
+    Emoji,
 }
 
 pub fn validate_custom_themes(settings: &AppSettings) -> Result<(), String> {
