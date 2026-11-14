@@ -245,10 +245,15 @@ html, body {
 }
 
 #settings-btn.update-available { position: relative; }
-.update-available-btn {
-  align-self: flex-start;
+#update-available-btn {
+  align-self: flex-end;
   margin: 0 14px 4px;
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  font-weight: 600;
 }
+#update-available-btn:hover { background: var(--accent-count-bg); }
 
 #update-dialog {
   margin: auto;
@@ -264,7 +269,8 @@ html, body {
 #update-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
 #update-dialog h2 { font-size: calc(16px * var(--text-scale)); }
 #update-dialog p { margin: 8px 0 14px; }
-.update-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.update-dialog-actions:not([hidden]) { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+#update-progress { width: 100%; accent-color: var(--accent-color); }
 
 .theme-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 #theme-file-status { overflow-wrap: anywhere; }

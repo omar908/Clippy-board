@@ -7,6 +7,7 @@ const stableTag = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 export async function checkLatestRelease() {
   const response = await fetch(endpoint, {
+    cache: "no-cache",
     credentials: "omit",
     headers: { Accept: "application/vnd.github+json" },
     signal: AbortSignal.timeout(10_000),

@@ -63,15 +63,18 @@ test("a failed signed installation leaves the release page and retry available",
   expect(await content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 });
 
-test("automatic updates offer the same confirmation from the main window", async ({ page }) => {
+test("automatic updates offer a right-aligned notice and show progress during installation", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 420 });
   await page.clock.install();
   await page.route("https://api.github.com/repos/omar908/Clippy-board/releases/latest", route =>
     route.fulfill({ json: { tag_name: "v999.0.0" }, headers: { "Access-Control-Allow-Origin": "*" } }),
   );
-  await page.goto("/?mode=main&signed-update=1");
+  await page.goto("/?mode=main&signed-update=1&slow-install=1");
   await expect(page.locator(".history-item")).toHaveCount(2);
   await page.clock.fastForward(31_000);
   const button = page.getByRole("button", { name: "Update available", exact: true });
+  await expect(button).toHaveCSS("align-self", "flex-end");
+  await expect(button).toBeInViewport({ ratio: 1 });
   await button.click();
   const dialog = page.getByRole("dialog", { name: "Install update?" });
   await expect(dialog).toContainText("999.0.0");
@@ -81,5 +84,30 @@ test("automatic updates offer the same confirmation from the main window", async
   await button.click();
   await dialog.getByRole("button", { name: "Install and restart" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-install-version", "999.0.0");
+  const installing = page.getByRole("dialog", { name: "Installing update" });
+  await expect(installing.getByRole("progressbar")).toBeVisible();
+  await expect(installing.getByRole("button")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(installing).toBeVisible();
+  await page.clock.fastForward(5_001);
   await expect(page.getByRole("dialog", { name: "Update failed" })).toBeVisible();
+});
+
+test("each successful manual check shows a fresh timestamp", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T12:00:00Z") });
+  await page.route("https://api.github.com/repos/omar908/Clippy-board/releases/latest", route =>
+    route.fulfill({ json: { tag_name: "v0.1.0" }, headers: { "Access-Control-Allow-Origin": "*" } }),
+  );
+  await page.goto("/?mode=main");
+  await expect(page.locator(".history-item")).toHaveCount(2);
+  await page.keyboard.press("Control+,");
+  const check = page.getByRole("button", { name: "Check for updates", exact: true });
+  const status = page.locator("#update-status");
+  await check.click();
+  await expect(status).toHaveText(/You’re up to date\. \(Checked at .+\)/);
+  const first = await status.textContent();
+  await page.clock.fastForward(2_000);
+  await check.click();
+  await expect(status).toHaveText(/You’re up to date\. \(Checked at .+\)/);
+  await expect(status).not.toHaveText(first!);
 });

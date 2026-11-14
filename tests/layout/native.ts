@@ -140,6 +140,7 @@ export async function invoke<T = unknown>(command: string, args?: Record<string,
     case "signed_update_available": result = params.has("signed-update"); break;
     case "install_signed_update":
       document.documentElement.dataset.installVersion = String(args?.version);
+      if (params.has("slow-install")) await new Promise(resolve => setTimeout(resolve, 5_000));
       throw "Invalid update signature";
     case "plugin:opener|open_url": document.documentElement.dataset.openedUrl = String(args?.url); break;
     case "show_window_menu": document.documentElement.dataset.menuCount = String(++menuCount); break;
