@@ -1,5 +1,4 @@
 import { expect, test } from "./helpers";
-import { readFile } from "node:fs/promises";
 
 test("custom themes preview drafts, save multiple palettes, and support editing and deletion", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 420 });
@@ -67,6 +66,18 @@ test("theme files round-trip through the editor without overwriting the original
   });
 
   await expect(page.getByRole("button", { name: "Import theme…" })).toBeEnabled();
+  const [picker] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: "Import theme…" }).click(),
+  ]);
+  await expect(page.locator("html")).toHaveAttribute("data-interacting", "true");
+  await picker.setFiles({
+    name: "night-sky.clippy-theme.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(palette)),
+  });
+  await expect(page.getByRole("dialog", { name: "Import theme" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-interacting", "true");
+  await editor.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-interacting", "false");
   await chooseFile({ ...palette, version: 2 });
   await expect(page.locator("#theme-file-status")).toContainText("version is unsupported");
   await expect(editor).toBeHidden();
@@ -75,11 +86,18 @@ test("theme files round-trip through the editor without overwriting the original
   await expect(editor.getByRole("status")).toContainText("Text on the window has low contrast");
   await editor.getByRole("button", { name: "Save and apply" }).click();
   await expect(editor).toBeHidden();
-  const [download] = await Promise.all([
-    page.waitForEvent("download"), page.getByRole("button", { name: "Export theme…" }).click(),
-  ]);
-  expect(download.suggestedFilename()).toBe("Night-sky.clippy-theme.json");
-  const exported = JSON.parse(await readFile(await download.path(), "utf8"));
+  const exportButton = page.getByRole("button", { name: "Export theme…" });
+  const status = page.locator("#theme-file-status");
+  await page.evaluate(() => { document.documentElement.dataset.themeExportOutcome = "cancel"; });
+  await exportButton.click();
+  await expect(status).toHaveText("Export canceled.");
+  await page.evaluate(() => { document.documentElement.dataset.themeExportOutcome = "error"; });
+  await exportButton.click();
+  await expect(status).toContainText("Couldn’t save the theme.");
+  await page.evaluate(() => { delete document.documentElement.dataset.themeExportOutcome; });
+  await exportButton.click();
+  await expect(status).toHaveText("Theme saved to C:\\Users\\Tester\\Downloads\\Night sky.clippy-theme.json");
+  const exported = JSON.parse((await page.locator("html").getAttribute("data-theme-export-contents"))!);
   expect(exported).toEqual(palette);
   await chooseFile(exported);
   await expect(editor.getByLabel("Name", { exact: true })).toHaveValue("Night sky (2)");

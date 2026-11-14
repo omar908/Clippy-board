@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings, CustomTheme } from "../api/settings";
 import { setInteracting } from "../api/window";
 import { applyPalette, colorKeys, contrastWarnings, validColor } from "./theme-palette";
@@ -67,6 +68,9 @@ export function bindCustomThemes(
   let id = "";
   let clearSample: (() => void) | undefined;
   let saving = false;
+  let exporting = false;
+  let pickingImport = false;
+  let enabled = false;
   const selected = () => getSettings()?.custom_themes.find(theme => select.value === `custom:${theme.id}`);
 
   function draft(): CustomTheme {
@@ -126,14 +130,29 @@ export function bindCustomThemes(
   create.addEventListener("click", () => open("create"));
   edit.addEventListener("click", () => open("edit"));
   remove.addEventListener("click", () => open("delete"));
-  importButton.addEventListener("click", () => {
+  importButton.addEventListener("click", async () => {
+    if (pickingImport) return;
     fileStatus.hidden = true;
-    fileInput.click();
+    pickingImport = true;
+    try {
+      await setInteracting(true);
+      fileInput.showPicker();
+    } catch {
+      await finishImport();
+      fileStatus.textContent = "Couldn’t open the theme file picker.";
+      fileStatus.hidden = false;
+    }
   });
+  async function finishImport() {
+    if (!pickingImport) return;
+    pickingImport = false;
+    if (!dialog.open) await setInteracting(false).catch(() => {});
+  }
+  fileInput.addEventListener("cancel", () => { void finishImport(); });
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     fileInput.value = "";
-    if (!file) return;
+    if (!file) { await finishImport(); return; }
     fileStatus.hidden = true;
     try {
       const imported = await importTheme(file);
@@ -142,18 +161,31 @@ export function bindCustomThemes(
       if (!getSettings() || importButton.disabled) return;
       fileStatus.textContent = failure instanceof Error ? failure.message : String(failure);
       fileStatus.hidden = false;
+    } finally {
+      await finishImport();
     }
   });
-  exportButton.addEventListener("click", () => {
+  exportButton.addEventListener("click", async () => {
     const theme = selected();
-    if (!theme) return;
-    const url = URL.createObjectURL(new Blob([exportTheme(theme)], { type: "application/json" }));
-    const link = document.createElement("a");
-    const filename = theme.name.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "theme";
-    link.href = url;
-    link.download = `${filename}.clippy-theme.json`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (!theme || exporting) return;
+    const name = theme.name.replace(/[<>:"/\\|?*\u0000-\u001f\u007f-\u009f]/g, "-").trim().replace(/[. ]+$/, "") || "theme";
+    const filename = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name) ? `_${name}` : name;
+    exporting = exportButton.disabled = true;
+    fileStatus.textContent = "Choose where to save your theme…";
+    fileStatus.hidden = false;
+    try {
+      await setInteracting(true);
+      const path = await invoke<string | null>("save_theme_file", {
+        filename: `${filename}.clippy-theme.json`, contents: exportTheme(theme),
+      });
+      fileStatus.textContent = path ? `Theme saved to ${path}` : "Export canceled.";
+    } catch (failure) {
+      fileStatus.textContent = `Couldn’t save the theme. ${failure instanceof Error ? failure.message : String(failure)}`;
+    } finally {
+      await setInteracting(false).catch(() => {});
+      exporting = false;
+      exportButton.disabled = !enabled;
+    }
   });
   base.addEventListener("change", () => setColors(presets[base.value as CustomTheme["base"]]));
   cancel.addEventListener("click", () => dialog.close());
@@ -197,10 +229,12 @@ export function bindCustomThemes(
       for (const theme of settings.custom_themes) select.add(new Option(theme.name, `custom:${theme.id}`));
       select.value = value;
     },
-    refresh(enabled: boolean) {
+    refresh(canEdit: boolean) {
+      enabled = canEdit;
       create.disabled = importButton.disabled = !enabled;
       edit.hidden = remove.hidden = exportButton.hidden = !selected();
-      edit.disabled = remove.disabled = exportButton.disabled = !enabled;
+      edit.disabled = remove.disabled = !enabled;
+      exportButton.disabled = !enabled || exporting;
     },
   };
 }

@@ -29,6 +29,7 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "zip"] }
+tauri-plugin-dialog = { version = "2", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10.1"

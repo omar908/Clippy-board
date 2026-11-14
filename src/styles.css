@@ -267,6 +267,7 @@ html, body {
 .update-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
 .theme-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#theme-file-status { overflow-wrap: anywhere; }
 
 #theme-editor {
   margin: auto;

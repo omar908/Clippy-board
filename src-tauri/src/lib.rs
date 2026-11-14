@@ -298,6 +298,41 @@ fn save_settings_cmd(
 }
 
 #[tauri::command]
+async fn save_theme_file(
+    window: tauri::WebviewWindow,
+    filename: String,
+    contents: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    if window.label() != "main" {
+        return Err("Export themes from the main window.".into());
+    }
+    if contents.len() > 16 * 1024
+        || !filename.ends_with(".clippy-theme.json")
+        || filename.chars().any(|c| c.is_control() || "<>:\"/\\|?*".contains(c))
+    {
+        return Err("Invalid theme export.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(file) = window.dialog().file()
+            .set_parent(&window)
+            .set_title("Export theme")
+            .set_file_name(filename)
+            .add_filter("Clippy-board theme", &["json"])
+            .blocking_save_file()
+        else {
+            return Ok(None);
+        };
+        let path = file.into_path().map_err(|err| err.to_string())?;
+        std::fs::write(&path, contents).map_err(|err| err.to_string())?;
+        Ok(Some(path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
 fn set_interacting(interacting: bool) -> bool {
     USER_INTERACTING.store(interacting, Ordering::SeqCst);
     interacting
@@ -645,6 +680,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::Builder::new().app_name(APP_NAME).build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -907,6 +943,7 @@ pub fn run() {
             updates::signed_update_available,
             updates::install_signed_update,
             set_interacting,
+            save_theme_file,
             is_pointer_held,
             preview_show,
             preview_update,
