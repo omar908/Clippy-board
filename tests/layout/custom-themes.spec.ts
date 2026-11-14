@@ -12,6 +12,13 @@ test("custom themes preview drafts, save multiple palettes, and support editing 
   const sample = editor.locator("#theme-sample");
   const surface = page.locator(".clippy-popup");
   await create.click();
+  const minimumWidth = (await editor.boundingBox())!.width;
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 760, height: 640 });
+  expect((await editor.boundingBox())!.width).toBeGreaterThan(minimumWidth + 200);
+  await expect(editor).toBeInViewport({ ratio: 1 });
+  await expect(editor.getByRole("button", { name: "Save and apply" })).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 360, height: 420 });
   await windowColor.fill("#f3f4f6");
   await expect(sample).toHaveCSS("background-color", "rgb(243, 244, 246)");
   await expect(editor.getByRole("status")).toContainText("Text on the window has low contrast");

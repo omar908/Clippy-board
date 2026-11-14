@@ -277,7 +277,7 @@ html, body {
 
 #theme-editor {
   margin: auto;
-  width: min(440px, calc(100vw - 24px));
+  width: min(calc(640px * var(--text-scale)), calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   padding: 14px;
   background: var(--bg-surface);
