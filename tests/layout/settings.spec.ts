@@ -19,6 +19,9 @@ test("Settings supports keyboard navigation and returns focus without trapping s
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Open near mouse pointer", { exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  // The unchanged default has a disabled Reset button.
   await expect(page.getByLabel("Start with Windows", { exact: true })).toBeFocused();
   await page.locator("#shortcut-item-restore").focus();
   await page.keyboard.press("Tab");

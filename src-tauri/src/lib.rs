@@ -6,6 +6,7 @@ mod item_selection;
 mod current_clipboard;
 mod startup;
 mod updates;
+mod pointer_position;
 
 #[tauri::command]
 fn get_current_clipboard_item_id(state: State<ClipboardState>) -> Option<String> {
@@ -650,7 +651,13 @@ fn show_main_window(app: &AppHandle) {
         // Record when we showed so the Focused(false) handler doesn't immediately hide
         WINDOW_SHOWN_AT.store(now_ms(), Ordering::SeqCst);
         // Center only the first time; afterwards keep the user's position/size
-        if !WINDOW_POSITIONED.swap(true, Ordering::SeqCst) {
+        let first_show = !WINDOW_POSITIONED.swap(true, Ordering::SeqCst);
+        let place_near_pointer = !window.is_visible().unwrap_or(true)
+            && !IS_PINNED.load(Ordering::SeqCst)
+            && !window.is_maximized().unwrap_or(true)
+            && settings::load_settings(app).open_near_pointer;
+        let positioned = place_near_pointer && pointer_position::place(&window);
+        if first_show && !positioned {
             let _ = window.center();
         }
         let _ = window.show();
@@ -661,11 +668,13 @@ fn show_main_window(app: &AppHandle) {
         #[cfg(target_os = "windows")]
         {
             use windows_sys::Win32::UI::WindowsAndMessaging::{
-                BringWindowToTop, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
+                BringWindowToTop, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW,
             };
             if let Ok(hwnd) = window.hwnd() {
                 unsafe {
-                    ShowWindow(hwnd.0 as _, SW_RESTORE);
+                    if IsIconic(hwnd.0 as _) != 0 {
+                        ShowWindow(hwnd.0 as _, SW_RESTORE);
+                    }
                     ShowWindow(hwnd.0 as _, SW_SHOW);
                     BringWindowToTop(hwnd.0 as _);
                     SetForegroundWindow(hwnd.0 as _);
