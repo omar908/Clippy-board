@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getSettings } from "../api/settings";
 import type { AppElements } from "./elements";
 import type { AppCommands } from "../app/commands";
-import { shortcutDefinitions, bindingsFromSettings, type AppShortcut } from "../app/shortcut-definitions";
+import { shortcutDefinitions, bindingsFromSettings, searchTabShortcut, type AppShortcut } from "../app/shortcut-definitions";
 import { ShortcutManager } from "../shortcuts";
 
 export function bindKeyboardEvents(elements: AppElements, commands: AppCommands) {
@@ -29,12 +29,20 @@ export function bindKeyboardEvents(elements: AppElements, commands: AppCommands)
   let revision = 0;
   const cleanups: (() => void)[] = [];
   for (const definition of shortcutDefinitions) {
+    if (definition.scope === "tabs") manager.register({
+      id: `${definition.id}.search`, combo: searchTabShortcut(definition.combo),
+      allowInSearchInput: true,
+      when: () => active() === elements.searchInput && !settingsOpen(),
+      stopImmediatePropagation: true,
+      action: () => definition.run(commands),
+    });
     manager.register({
       id: definition.id, combo: definition.combo,
       allowInSearchInput: definition.scope !== "list",
       allowWhenTyping: definition.scope === "settings" || definition.scope === "escape" || definition.scope === "window",
       allowInSettingsInput: definition.scope === "settings" || definition.scope === "escape",
       when: () => {
+        if (definition.scope === "tabs" && active() === elements.searchInput) return false;
         if (document.getElementById("update-dialog")?.hasAttribute?.("open")
           || document.getElementById("theme-editor")?.hasAttribute?.("open")) return false;
         if (definition.id === "item.copy" && active()?.id === "update-available-btn") return false;
