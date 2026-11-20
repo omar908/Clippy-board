@@ -13,6 +13,7 @@ Download the Windows installer from [GitHub Releases](https://github.com/omar908
 - Pin items you want to keep and use the Deleted tab to restore recently deleted items.
 - Look for the **On clipboard** badge to see which history entry matches the current clipboard.
 - Open Settings with **Ctrl+,** to change shortcuts, enable Start with Windows, adjust history retention, or turn on Compact mode. Changes save as you edit.
+- Enable **Open near mouse pointer** to position the hidden, unpinned window near your pointer when opening it. Pinned and maximized windows keep their position.
 - Under **Settings → Appearance**, choose Follow Windows (the default), Dark, Light, or OLED black. The theme applies to the main window and the separate preview.
 - Under **Settings → Appearance → Font**, choose System (the default) or OpenDyslexic. OpenDyslexic is bundled for offline use in both windows under the [SIL Open Font License](public/fonts/opendyslexic/OFL.txt). [Upstream font source](https://github.com/antijingoist/opendyslexic/tree/1824da5c0e41dc3e13ffc7f3a636dcaf695d61b7)
 - Use **Settings → Appearance → Text size** to scale text in both windows. The default is 100%.

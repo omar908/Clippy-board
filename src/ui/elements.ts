@@ -26,6 +26,7 @@ export function getAppElements() {
   const settingMaxHistory = getEl("setting-max-history") as HTMLInputElement;
   const settingDeleteTtl = getEl("setting-delete-ttl") as HTMLInputElement;
   const settingStartOnLogin = getEl("setting-start-on-login") as HTMLInputElement;
+  const settingOpenNearPointer = getEl("setting-open-near-pointer") as HTMLInputElement;
   const settingCompactMode = getEl("setting-compact-mode") as HTMLInputElement;
   const settingTextSize = getEl("setting-text-size") as HTMLSelectElement;
   const settingFont = getEl("setting-font") as HTMLSelectElement;
@@ -48,7 +49,7 @@ export function getAppElements() {
   const countImage = getEl("count-image") as HTMLSpanElement;
   const countFile = getEl("count-file") as HTMLSpanElement;
 
-  return { settingTextSize, settingFont, settingTheme, settingAutomaticUpdateChecks, settingCompactMode, settingStartOnLogin, settingShowPinned, countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsAttention, settingsStatus, settingsRetry, settingsLeave, settingsReview, settingsDiscard, countAll, countText, countImage, countFile };
+  return { settingOpenNearPointer, settingTextSize, settingFont, settingTheme, settingAutomaticUpdateChecks, settingCompactMode, settingStartOnLogin, settingShowPinned, countPinned, countDeleted, searchInput, searchClearBtn, historyList, emptyState, emptyTitle, emptyDesc, emptyTitleDefault, emptyDescDefault, filterTabs, pauseBtn, pinBtn, clearBtn, closeBtn, settingsBtn, settingsPage, settingsBackBtn, mainContent, settingMaxHistory, settingDeleteTtl, shortcutPinItem, shortcutDelete, shortcutPause, shortcutSearch, shortcutsReset, settingsAttention, settingsStatus, settingsRetry, settingsLeave, settingsReview, settingsDiscard, countAll, countText, countImage, countFile };
 }
 
 export type AppElements = ReturnType<typeof getAppElements>;

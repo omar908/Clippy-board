@@ -5,7 +5,7 @@ import { normalizeShortcut, shortcutFromEvent } from "../shortcut-combo";
 import type { AppElements } from "./elements";
 import { bindSettingStatus } from "./settings-field-status";
 
-type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "compact_mode" | "automatic_update_checks" | "theme" | "font" | "text_size";
+type ScalarKey = "max_history" | "delete_ttl_seconds" | "start_on_login" | "show_pinned_in_all" | "open_near_pointer" | "compact_mode" | "automatic_update_checks" | "theme" | "font" | "text_size";
 export type SettingField = {
   input: HTMLInputElement | HTMLSelectElement; label: string; key: ScalarKey | "shortcuts";
   shortcutKey?: string; defaultValue: string | boolean;
@@ -63,6 +63,7 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
     [elements.settingDeleteTtl, "Delete TTL", "delete_ttl_seconds"],
     [elements.settingStartOnLogin, "Start with Windows", "start_on_login"],
     [elements.settingShowPinned, "Show pinned items in All", "show_pinned_in_all"],
+    [elements.settingOpenNearPointer, "Open near mouse pointer", "open_near_pointer"],
     [elements.settingCompactMode, "Compact mode", "compact_mode"],
     [elements.settingAutomaticUpdateChecks, "Check for updates automatically", "automatic_update_checks"],
     [elements.settingTheme, "Theme", "theme"],

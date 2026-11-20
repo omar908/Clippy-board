@@ -32,6 +32,8 @@ pub struct AppSettings {
     pub show_pinned_in_all: bool,
     #[serde(default)]
     pub compact_mode: bool,
+    #[serde(default)]
+    pub open_near_pointer: bool,
     #[serde(default = "default_automatic_update_checks")]
     pub automatic_update_checks: bool,
     #[serde(default)]
@@ -155,6 +157,7 @@ impl Default for AppSettings {
             start_on_login: false,
             show_pinned_in_all: true,
             compact_mode: false,
+            open_near_pointer: false,
             automatic_update_checks: default_automatic_update_checks(),
             theme: Theme::default(),
             custom_theme_id: None,
@@ -175,6 +178,7 @@ mod tests {
         assert!(settings.show_pinned_in_all);
         assert!(!settings.start_on_login);
         assert!(!settings.compact_mode);
+        assert!(!settings.open_near_pointer);
         assert!(settings.automatic_update_checks);
         assert_eq!(settings.theme, Theme::System);
         assert_eq!(settings.font, AppearanceFont::System);

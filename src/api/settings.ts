@@ -21,6 +21,7 @@ export type AppSettings = {
   start_on_login: boolean;
   show_pinned_in_all: boolean;
   compact_mode: boolean;
+  open_near_pointer: boolean;
   automatic_update_checks: boolean;
   theme: Theme | "custom";
   custom_theme_id: string | null;
@@ -32,7 +33,7 @@ export type AppSettings = {
 export const defaultSettings: AppSettings = {
   max_history: 100, delete_immediately: false, delete_ttl_seconds: 60,
   shortcuts: {}, start_on_login: false, show_pinned_in_all: true, compact_mode: false,
-  automatic_update_checks: true, theme: "system", font: "system", text_size: "100",
+  automatic_update_checks: true, theme: "system", font: "system", text_size: "100", open_near_pointer: false,
   custom_theme_id: null, custom_themes: [],
 };
 
