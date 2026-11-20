@@ -1,6 +1,6 @@
 import type { AppSettings } from "../api/settings";
 import { defaultSettings } from "../api/settings";
-import { shortcutDefinitions } from "../app/shortcut-definitions";
+import { shortcutDefinitions, searchTabShortcut } from "../app/shortcut-definitions";
 import { normalizeShortcut, shortcutFromEvent } from "../shortcut-combo";
 import type { AppElements } from "./elements";
 import { bindSettingStatus } from "./settings-field-status";
@@ -23,6 +23,18 @@ export function createSettingsFields(elements: AppElements, edit: (field: Settin
       status: bindSettingStatus(input, label, defaultValue,
         () => { editing = false; edit(field, true); }, () => { editing = false; edit(field, true); }) };
     fields.push(field);
+    if (shortcutKey === "tabLeft" || shortcutKey === "tabRight") {
+      const hint = document.createElement("div");
+      hint.className = "settings-field-default";
+      const refresh = field.status.refresh;
+      field.status.refresh = () => {
+        refresh();
+        try { hint.textContent = `While searching: ${searchTabShortcut(input.value) || "Disabled"}`; }
+        catch { hint.textContent = "While searching: invalid shortcut"; }
+      };
+      input.closest(".settings-row")?.append(hint);
+      field.status.refresh();
+    }
     if (shortcutKey && input.tagName === "INPUT") {
       const recorder = input as HTMLInputElement;
       recorder.placeholder = "Disabled";
